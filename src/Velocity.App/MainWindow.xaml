@@ -1,0 +1,522 @@
+<Window x:Class="Velocity.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Velocity"
+        Width="1240" Height="760" MinWidth="1000" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Icon="pack://application:,,,/Velocity.App;component/icon.ico"
+        KeyDown="WindowKeyDown">
+
+    <Window.Resources>
+        <DataTemplate x:Key="NavItemTemplate">
+            <DockPanel LastChildFill="True">
+                <Border DockPanel.Dock="Right" Background="{DynamicResource TrackBrush}" CornerRadius="9"
+                        Height="18" MinWidth="20" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center"
+                        Visibility="{Binding Count, Converter={StaticResource CountVisibility}}">
+                    <TextBlock Text="{Binding Count}" FontSize="10" FontWeight="SemiBold"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <Path Data="{Binding Icon}" Width="17" Height="17" Stretch="Uniform"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"
+                      StrokeThickness="1.55" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Name}" Margin="11,0,0,0" FontSize="12.5" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ListBoxItem}}"/>
+            </DockPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="DownloadCardTemplate">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- File type tile -->
+                <Border Width="44" Height="44" CornerRadius="11" VerticalAlignment="Top" Margin="0,1,0,0"
+                        Background="{Binding FileCategory, Converter={StaticResource CategoryBrush}, ConverterParameter=Tint}">
+                    <TextBlock Text="{Binding ExtensionLabel}" FontSize="9.5" FontWeight="Bold"
+                               Foreground="{Binding FileCategory, Converter={StaticResource CategoryBrush}}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+
+                <!-- Identity, size, progress -->
+                <Grid Grid.Column="1" Margin="12,0,14,0" VerticalAlignment="Center">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Right" Background="{DynamicResource CardBrush}" CornerRadius="8"
+                                Padding="8,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="6" Height="6" VerticalAlignment="Center">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="{DynamicResource MutedTextBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="Downloading">
+                                                    <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                    <Setter Property="Fill" Value="{DynamicResource SuccessBrush}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Paused">
+                                                    <Setter Property="Fill" Value="{DynamicResource WarningBrush}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                                    <Setter Property="Fill" Value="{DynamicResource DangerBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Text="{Binding StatusText}" FontSize="10.5" Margin="6,0,0,0"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding FileName}" FontSize="13.5" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                <TextBlock.ToolTip>
+                                    <!-- The link the file was fetched from, with a one-click copy, never the local path. -->
+                                    <ToolTip Padding="0" BorderThickness="0" Background="Transparent" HasDropShadow="False"
+                                             Placement="Mouse" ToolTipService.ShowDuration="60000">
+                                        <Border Background="{DynamicResource CardBrush}" BorderThickness="1"
+                                                BorderBrush="{DynamicResource TrackBrush}" CornerRadius="10" Padding="12,10"
+                                                MaxWidth="440">
+                                            <StackPanel>
+                                                <TextBlock Text="DOWNLOAD LINK" FontSize="9.5" FontWeight="Bold"
+                                                           Foreground="{DynamicResource MutedTextBrush}"/>
+                                                <TextBlock Text="{Binding Url}" FontSize="11.5" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                                                <Button Content="Copy link" Click="CopyLinkClick" Tag="{Binding}"
+                                                        Margin="0,9,0,0" Padding="10,5" FontSize="11.5" Cursor="Hand"
+                                                        HorizontalAlignment="Left" BorderThickness="0"
+                                                        Background="{DynamicResource AccentBrush}" Foreground="White"/>
+                                                <TextBlock Text="{Binding DestinationPath}" FontSize="11" Margin="0,9,0,0"
+                                                           Foreground="{DynamicResource MutedTextBrush}" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding Error}" FontSize="11" Margin="0,4,0,0"
+                                                           Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </ToolTip>
+                                </TextBlock.ToolTip>
+                            </TextBlock>
+                            <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="CopyLinkClick"
+                                    ToolTip="Copy link" Margin="6,0,0,0" VerticalAlignment="Center">
+                                <Path Data="{StaticResource IconCopy}" Width="13" Height="13" Stretch="Uniform"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                            </Button>
+                        </Grid>
+                    </DockPanel>
+
+                    <TextBlock Grid.Row="1" Text="{Binding Details}" Style="{StaticResource CaptionStyle}"
+                               FontSize="11" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+
+                    <Grid Grid.Row="2" Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ProgressBar Value="{Binding Progress, Mode=OneWay}" Height="6" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="1" Text="{Binding PercentText}" FontSize="10.5" FontWeight="SemiBold"
+                                   Margin="10,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
+                    </Grid>
+                </Grid>
+
+                <!-- Actions -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="PauseClick" ToolTip="Pause"
+                            Visibility="{Binding CanPause, Converter={StaticResource BoolVisibility}}">
+                        <Path Data="{StaticResource IconPause}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="ResumeClick" ToolTip="Resume"
+                            Visibility="{Binding CanResume, Converter={StaticResource BoolVisibility}}">
+                        <Path Data="{StaticResource IconPlay}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeLineJoin="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="RetryClick" ToolTip="Retry"
+                            Visibility="{Binding CanRetry, Converter={StaticResource BoolVisibility}}">
+                        <Path Data="{StaticResource IconRefresh}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="OpenFileClick" ToolTip="Open file"
+                            Visibility="{Binding CanOpenFile, Converter={StaticResource BoolVisibility}}">
+                        <Path Data="{StaticResource IconOpen}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="SpeedLimitClick" ToolTip="Speed limit"
+                            Visibility="{Binding CanLimit, Converter={StaticResource BoolVisibility}}">
+                        <Path Data="{StaticResource IconGauge}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="OpenFolderClick" ToolTip="Show in folder"
+                            Visibility="{Binding CanOpenFolder, Converter={StaticResource BoolVisibility}}">
+                        <Path Data="{StaticResource IconFolder}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeLineJoin="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource DangerIconButtonStyle}" Tag="{Binding}" Click="DeleteItemClick" ToolTip="Delete"
+                            Margin="2,0,0,0">
+                        <Path Data="{StaticResource IconDelete}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.55" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="252"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ═══ Sidebar ═══ -->
+        <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+            <DockPanel Margin="14,18,14,14">
+
+                <!-- Brand -->
+                <Grid DockPanel.Dock="Top" Margin="6,0,0,26">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Width="38" Height="38" CornerRadius="11" Background="{DynamicResource AccentGradientBrush}">
+                        <TextBlock Text="V" FontSize="20" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Velocity" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock Text="DOWNLOAD MANAGER" FontSize="8.5" FontWeight="Bold" Margin="1,1,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Status card -->
+                <Border DockPanel.Dock="Bottom" Background="{DynamicResource CardBrush}" CornerRadius="11"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="12,11" Margin="0,16,0,0">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
+                            <TextBlock Text="Browser capture active" FontSize="11" Margin="8,0,0,0"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+                        </StackPanel>
+                        <TextBlock x:Name="SidebarSummary" Text="No transfers running" FontSize="10.5" Margin="15,6,0,0"
+                                   Foreground="{DynamicResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Border>
+
+                <StackPanel>
+                    <TextBlock Text="LIBRARY" Style="{StaticResource SectionLabelStyle}" Margin="10,0,0,8"/>
+                    <ListBox x:Name="FilterList" Style="{StaticResource NavListStyle}"
+                             ItemTemplate="{StaticResource NavItemTemplate}"
+                             SelectionChanged="FilterSelectionChanged"/>
+
+                    <TextBlock Text="TOOLS" Style="{StaticResource SectionLabelStyle}" Margin="10,22,0,8"/>
+                    <Button Style="{StaticResource NavButtonStyle}" Click="SchedulerClick">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconCalendar}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" VerticalAlignment="Center"/>
+                            <TextBlock Text="Scheduler" Margin="11,0,0,0"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavButtonStyle}" Click="SettingsClick">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconSettings}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center"/>
+                            <TextBlock Text="Settings" Margin="11,0,0,0"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource NavButtonStyle}" Click="AboutClick">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconInfo}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  VerticalAlignment="Center"/>
+                            <TextBlock Text="About" Margin="11,0,0,0"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══ Content ═══ -->
+        <Grid Grid.Column="1" Margin="26,22,26,14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,20">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock x:Name="PageTitle" Text="All downloads" Style="{StaticResource PageTitleStyle}"/>
+                    <TextBlock x:Name="PageSubtitle" Text="Manage and monitor every transfer"
+                               Style="{StaticResource CaptionStyle}" Margin="0,5,0,0"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Style="{StaticResource SecondaryButtonStyle}" Click="PauseAllClick"
+                            Margin="0,0,8,0" Padding="13,10" ToolTip="Pause every active download">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPause}" Width="14" Height="14" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.6" StrokeStartLineCap="Round" VerticalAlignment="Center"/>
+                            <TextBlock Text="Pause all" Margin="7,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource SecondaryButtonStyle}" Click="ResumeAllClick"
+                            Margin="0,0,8,0" Padding="13,10" ToolTip="Resume every paused download">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPlay}" Width="14" Height="14" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeLineJoin="Round" VerticalAlignment="Center"/>
+                            <TextBlock Text="Resume all" Margin="7,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="PrioritizeButton" Style="{StaticResource SecondaryButtonStyle}" Click="PrioritizeSelectedClick"
+                            IsEnabled="False" Margin="0,0,8,0" Padding="13,10" ToolTip="Start the selected downloads before the rest">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconDownload}" Width="14" Height="14" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center"/>
+                            <TextBlock Text="Start first" Margin="7,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="DeleteButton" Style="{StaticResource SecondaryButtonStyle}" Click="DeleteSelectedClick"
+                            IsEnabled="False" Margin="0,0,8,0" Padding="13,10" ToolTip="Delete selected downloads">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconDelete}" Width="14" Height="14" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                  VerticalAlignment="Center"/>
+                            <TextBlock Text="Delete" Margin="7,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource PrimaryButtonStyle}" Click="AddDownloadClick" Padding="16,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource IconPlus}" Width="14" Height="14" Stretch="Uniform"
+                                  Stroke="White" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  VerticalAlignment="Center"/>
+                            <TextBlock Text="Add download" Margin="8,0,0,0" VerticalAlignment="Center"
+                                       Foreground="White" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Stats -->
+            <Grid Grid.Row="1" Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{DynamicResource CardBrush}" CornerRadius="12"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="14,12" Margin="0,0,12,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}"
+                                VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconDownload}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.7"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="ActiveStatText" Text="0" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="Downloading" FontSize="10.5" Foreground="{DynamicResource MutedTextBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Background="{DynamicResource CardBrush}" CornerRadius="12"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="14,12" Margin="0,0,12,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource CardAltBrush}"
+                                VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconClock}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{DynamicResource SecondaryTextBrush}" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="QueuedStatText" Text="0" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="Queued" FontSize="10.5" Foreground="{DynamicResource MutedTextBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="2" Background="{DynamicResource CardBrush}" CornerRadius="12"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="14,12" Margin="0,0,12,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource SuccessSoftBrush}"
+                                VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconCheckCircle}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{DynamicResource SuccessBrush}" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="CompletedStatText" Text="0" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock Text="Completed" FontSize="10.5" Foreground="{DynamicResource MutedTextBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="3" Background="{DynamicResource CardBrush}" CornerRadius="12"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="14,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource CardAltBrush}"
+                                VerticalAlignment="Center">
+                            <Path Data="{StaticResource IconChart}" Width="17" Height="17" Stretch="Uniform"
+                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
+                            <TextBlock x:Name="VolumeStatText" Text="0 B" FontSize="18" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="Total data" FontSize="10.5" Foreground="{DynamicResource MutedTextBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- Search -->
+            <Border Grid.Row="2" Background="{DynamicResource CardBrush}" CornerRadius="11" Height="42"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="0,0,0,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Path Data="{StaticResource IconSearch}" Width="15" Height="15" Stretch="Uniform" Margin="14,0,10,0"
+                          Stroke="{DynamicResource MutedTextBrush}" StrokeThickness="1.7"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" VerticalAlignment="Center"/>
+                    <Grid Grid.Column="1">
+                        <TextBox x:Name="SearchTextBox" Style="{StaticResource SearchBoxStyle}"
+                                 TextChanged="SearchTextChanged" GotFocus="SearchGotFocus" LostFocus="SearchLostFocus"/>
+                        <TextBlock x:Name="SearchPlaceholder" Text="Search by file name, link or folder…"
+                                   Foreground="{DynamicResource MutedTextBrush}" FontSize="12.5"
+                                   IsHitTestVisible="False" VerticalAlignment="Center" Margin="2,0,0,0"/>
+                    </Grid>
+                    <TextBlock x:Name="ResultsText" Grid.Column="2" Style="{StaticResource CaptionStyle}"
+                               Margin="10,0,14,0" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <!-- Library -->
+            <Border Grid.Row="3" Background="{DynamicResource CardBrush}" CornerRadius="14"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="10">
+                <Grid>
+                    <ListView x:Name="DownloadsGrid" Background="Transparent" BorderThickness="0" Padding="0,0,4,0"
+                              SelectionMode="Extended"
+                              ItemTemplate="{StaticResource DownloadCardTemplate}"
+                              SelectionChanged="DownloadsSelectionChanged"
+                              PreviewMouseDown="DownloadsGridPreviewMouseDown"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                              ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem" BasedOn="{StaticResource DownloadItemStyle}"/>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
+
+                    <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" Width="370">
+                        <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AccentSoftBrush}"
+                                HorizontalAlignment="Center">
+                            <Path Data="{StaticResource IconDownload}" Width="30" Height="30" Stretch="Uniform"
+                                  Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Border>
+                        <TextBlock Text="No downloads yet" FontSize="19" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,18,0,0"/>
+                        <TextBlock Text="Paste a link or capture one from your browser to start your first transfer."
+                                   TextWrapping="Wrap" TextAlignment="Center" Margin="0,8,0,18"
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
+                        <Button Content="Add your first download" Style="{StaticResource PrimaryButtonStyle}"
+                                Click="AddDownloadClick" HorizontalAlignment="Center" Padding="18,10"/>
+                    </StackPanel>
+
+                    <StackPanel x:Name="NoResultsState" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Width="370" Visibility="Collapsed">
+                        <Border Width="60" Height="60" CornerRadius="30" Background="{DynamicResource CardAltBrush}"
+                                HorizontalAlignment="Center">
+                            <Path Data="{StaticResource IconSearch}" Width="24" Height="24" Stretch="Uniform"
+                                  Stroke="{DynamicResource MutedTextBrush}" StrokeThickness="1.7"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Border>
+                        <TextBlock Text="Nothing matches this view" FontSize="17" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                        <TextBlock Text="Try another search term or clear the filters." TextWrapping="Wrap"
+                                   TextAlignment="Center" Margin="0,7,0,16"
+                                   Foreground="{DynamicResource MutedTextBrush}"/>
+                        <Button Content="Clear filters" Style="{StaticResource SecondaryButtonStyle}"
+                                Click="ClearFiltersClick" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Footer -->
+            <Grid Grid.Row="4" Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7" Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StatusBarText" Text="Ready" Margin="8,0,0,0" Style="{StaticResource CaptionStyle}"/>
+                </StackPanel>
+                <TextBlock Grid.Column="2" x:Name="VersionText" Text="Velocity 1.0" Style="{StaticResource CaptionStyle}"/>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

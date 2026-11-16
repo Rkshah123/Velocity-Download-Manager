@@ -1,0 +1,7 @@
+{
+  "name": "com.velocity.download_manager",
+  "description": "Velocity native messaging host",
+  "path": "HOST_EXECUTABLE",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://REPLACE_WITH_CHROME_EDGE_OR_BRAVE_EXTENSION_ID/"]
+}

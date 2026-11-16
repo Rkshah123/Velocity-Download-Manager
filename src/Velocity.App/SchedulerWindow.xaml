@@ -1,0 +1,74 @@
+<Window x:Class="Velocity.App.SchedulerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Schedule download" Width="580" SizeToContent="Height" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" Background="{DynamicResource WindowBackgroundBrush}"
+        Icon="pack://application:,,,/Velocity.App;component/icon.ico" ShowInTaskbar="False">
+    <Border Margin="18" Padding="24" Background="{DynamicResource CardBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14">
+        <StackPanel>
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="42" Height="42" CornerRadius="12" Background="{DynamicResource AccentSoftBrush}"
+                        VerticalAlignment="Top">
+                    <Path Data="{StaticResource IconCalendar}" Width="20" Height="20" Stretch="Uniform"
+                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.6"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="13,0,0,0">
+                    <TextBlock Text="Schedule a download" FontSize="21" FontWeight="SemiBold"/>
+                    <TextBlock Text="Velocity starts the transfer at the time you choose." Margin="0,4,0,0"
+                               FontSize="11.5" Foreground="{DynamicResource MutedTextBrush}"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="FILE URL" Style="{StaticResource FieldLabelStyle}"/>
+            <TextBox x:Name="UrlBox" Style="{StaticResource InputBoxStyle}" Height="42"/>
+
+            <Grid Margin="0,18,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="14"/>
+                    <ColumnDefinition Width="150"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="START DATE" Style="{StaticResource FieldLabelStyle}"/>
+                    <TextBox x:Name="DateBox" Style="{StaticResource InputBoxStyle}" Height="42"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <Button Content="Today" Style="{StaticResource GhostButtonStyle}" Click="TodayClick"
+                                Padding="10,5" FontSize="10.5"/>
+                        <Button Content="Tomorrow" Style="{StaticResource GhostButtonStyle}" Click="TomorrowClick"
+                                Padding="10,5" FontSize="10.5" Margin="2,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="START TIME (24H)" Style="{StaticResource FieldLabelStyle}"/>
+                    <TextBox x:Name="TimeBox" Text="12:00" Style="{StaticResource InputBoxStyle}" Height="42"/>
+                </StackPanel>
+            </Grid>
+
+            <Border Background="{DynamicResource WarningSoftBrush}" BorderBrush="{DynamicResource WarningBrush}"
+                    BorderThickness="1" CornerRadius="9" Padding="12,9" Margin="0,16,0,0">
+                <TextBlock Text="Keep Velocity running. A schedule cannot start while the application is closed."
+                           TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"/>
+            </Border>
+
+            <Border x:Name="ErrorPanel" Visibility="Collapsed" Background="{DynamicResource DangerSoftBrush}"
+                    BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1" CornerRadius="9"
+                    Padding="12,9" Margin="0,12,0,0">
+                <TextBlock x:Name="ErrorBox" Foreground="{DynamicResource DangerBrush}" FontSize="11.5"
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+                <Button Content="Cancel" Style="{StaticResource SecondaryButtonStyle}" Click="CancelClick"
+                        Padding="18,9" Margin="0,0,8,0" IsCancel="True"/>
+                <Button Content="Schedule" Style="{StaticResource PrimaryButtonStyle}" Click="ScheduleClick"
+                        Padding="20,9" IsDefault="True"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

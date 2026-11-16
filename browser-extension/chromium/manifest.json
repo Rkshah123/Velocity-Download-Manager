@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Velocity Download Manager",
+  "version": "2.1.0",
+  "description": "Automatic file detection and verified download capture for Velocity: offers files before they download and keeps your browser's own downloads working.",
+  "minimum_chrome_version": "116",
+  "permissions": ["downloads", "contextMenus", "nativeMessaging", "storage", "webRequest"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Velocity",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "24": "icons/velocity-24.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "web_accessible_resources": [
+    { "resources": ["icons/*.png"], "matches": ["http://*/*", "https://*/*"] }
+  ],
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js", "detector.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

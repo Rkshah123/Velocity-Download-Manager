@@ -1,0 +1,87 @@
+VELOCITY BROWSER QUICK GUIDE
+============================
+
+Use this guide to connect Velocity with Chrome, Edge, Brave, or Firefox.
+
+1. BUILD VELOCITY
+-----------------
+From the project root:
+
+    dotnet build .\Velocity.slnx
+
+Start Velocity before testing browser downloads.
+
+2. LOAD THE EXTENSION
+---------------------
+Chrome, Edge, or Brave:
+
+- Open the browser extension page:
+  Chrome: chrome://extensions
+  Edge: edge://extensions
+  Brave: brave://extensions
+- Enable Developer mode.
+- Click Load unpacked.
+- Select:
+  C:\Users\ShahrukhKhan\Desktop\Velocity\browser-extension\chromium
+- Copy the extension ID shown by the browser.
+
+Firefox:
+
+- Open about:debugging#/runtime/this-firefox.
+- Click Load Temporary Add-on.
+- Select:
+  C:\Users\ShahrukhKhan\Desktop\Velocity\browser-extension\firefox\manifest.json
+
+3. REGISTER NATIVE MESSAGING
+----------------------------
+Publish the host:
+
+    .\browser-extension\publish-browser-host.ps1
+
+Register it for the current Windows user:
+
+    .\browser-extension\register-native-host.ps1 `
+      -HostExecutable "C:\full\path\to\Velocity.BrowserHost.exe" `
+      -ChromiumExtensionId "YOUR_CHROMIUM_EXTENSION_ID"
+
+Restart the browser after registration.
+
+4. SELECT CAPTURE MODE
+----------------------
+Open the extension options page and choose:
+
+- Manual: direct file links show the Velocity popup. Normal browser downloads
+  remain browser downloads unless explicitly sent to Velocity.
+- Automatic: browser-created downloads are also shown through the fallback
+  download detector.
+
+5. TEST A DOWNLOAD
+------------------
+Use an ordinary direct HTTP/HTTPS file link such as a PDF, ZIP, MP4, PNG, or
+EXE file.
+
+When a supported direct link is clicked, the Velocity popup shows:
+
+- Filename and extension.
+- File size when the server provides it.
+- Download URL.
+- Velocity's configured default destination.
+
+Popup actions:
+
+- Download: starts the file in the Velocity queue.
+- Download Later: adds it to the Velocity queue without starting it.
+- Cancel: cancels the request. For fallback browser downloads, the browser
+  download is cancelled when the browser allows it.
+
+6. IMPORTANT LIMITATION
+-----------------------
+Direct HTTP/HTTPS file links can be intercepted before browser navigation.
+
+JavaScript-created downloads, blob URLs, redirect-only downloads, form-based
+downloads, protected streaming, and some browser-created downloads cannot always
+be intercepted before the browser starts them. Automatic mode uses the browser's
+downloads.onCreated fallback for those cases, so duplicate bytes cannot be
+guaranteed to be zero.
+
+Velocity does not bypass DRM, paywalls, authentication, or protected streaming.

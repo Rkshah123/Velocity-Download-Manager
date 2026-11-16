@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velocity — browser settings</title>
+<style>
+  :root {
+    --page: #0B0E13; --card: #141823; --alt: #1A1F2B; --border: #232A37; --text: #F2F5FA;
+    --secondary: #AFBACB; --muted: #7A8698; --accent: #5B8CFF; --accent2: #7C6BFF;
+    --success: #34D399; --danger: #F87171; --warn: #F5B84B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 56px; background: var(--page); color: var(--text);
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 13.5px; line-height: 1.5;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .brand {
+    width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 19px;
+  }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px;
+  }
+  h2 { font-size: 11px; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; font-weight: 700; }
+  .row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; }
+  .row:last-child { margin-bottom: 0; }
+  .row label { font-weight: 600; }
+  .row p { margin: 2px 0 0; color: var(--muted); font-size: 11.5px; }
+  input[type="checkbox"] { width: 16px; height: 16px; margin-top: 3px; accent-color: var(--accent); }
+  textarea, select {
+    width: 100%; margin-top: 8px; padding: 10px 12px; border-radius: 9px; font-family: inherit; font-size: 12.5px;
+    background: var(--alt); color: var(--text); border: 1px solid var(--border); resize: vertical;
+  }
+  textarea { min-height: 86px; font-family: "Cascadia Mono", "Consolas", monospace; font-size: 11.5px; }
+  select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: var(--success); }
+  .dot.bad { background: var(--danger); }
+  .dot.warn { background: var(--warn); }
+  .detail { color: var(--muted); font-size: 11.5px; margin: 0; word-break: break-word; }
+  button {
+    font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 9px 16px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--alt); color: var(--text);
+  }
+  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; border-color: transparent; }
+  button:hover { border-color: var(--accent); }
+  .bar { display: flex; align-items: center; gap: 12px; position: sticky; bottom: 0; padding: 14px 0 0; background: linear-gradient(to top, var(--page) 60%, transparent); }
+  .save-note { color: var(--success); font-size: 12px; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 8px; }
+  code { background: var(--alt); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">V</div>
+    <div>
+      <h1>Velocity browser settings</h1>
+      <div class="sub">Download interception, exclusions and appearance</div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Connection</h2>
+    <div class="status"><span class="dot" id="hostDot"></span><span id="hostState">Checking the Velocity app…</span></div>
+    <p class="detail" id="hostDetail"></p>
+    <p class="hint">If the app is reported as not reachable, run <code>register-native-host.ps1</code> from the <code>browser-extension</code> folder once, then reload the extension.</p>
+    <button id="refresh" style="margin-top: 12px">Check again</button>
+  </section>
+
+  <section>
+    <h2>Automatic detection</h2>
+    <div class="row">
+      <input type="checkbox" id="detect">
+      <div>
+        <label for="detect">Show a Velocity button for files on the page</label>
+        <p>A small Velocity button appears next to file links and media the page offers, and when the page fetches a file on its own. Each one is verified against the server response first, and nothing is queued until you click it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Downloads</h2>
+    <div class="row">
+      <input type="checkbox" id="intercept">
+      <div>
+        <label for="intercept">Offer browser downloads to Velocity</label>
+        <p>Downloads the browser starts itself are cancelled and offered to you, one prompt at a time; when several arrive together the rest wait in a queue until the open prompt is answered. Cancel downloads nothing — the browser's copy is already gone. Files under 256 KB are left alone.</p>
+      </div>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="ask">
+      <div>
+        <label for="ask">Ask me before every download</label>
+        <p>When off, verified downloads go straight to Velocity without showing the offer card.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex: 1">
+        <label for="theme">Appearance</label>
+        <p>Follow the app theme, or pin the offer card to one theme.</p>
+        <select id="theme">
+          <option value="auto">Follow the Velocity app</option>
+          <option value="Midnight">Midnight</option>
+          <option value="Ember">Ember</option>
+          <option value="Light">Light</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex: 1">
+        <label for="excluded">Never intercept these sites</label>
+        <p>One host per line, for example <code>intranet.example.com</code>.</p>
+        <textarea id="excluded" spellcheck="false" placeholder="intranet.example.com"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <div class="bar">
+    <button class="primary" id="save">Save settings</button>
+    <span class="save-note" id="note"></span>
+  </div>
+</div>
+<script src="options.js"></script>
+</body>
+</html>

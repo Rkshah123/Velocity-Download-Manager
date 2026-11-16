@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Velocity.App/Velocity.App.csproj" />
+    <Project Path="src/Velocity.BrowserHost/Velocity.BrowserHost.csproj" />
+    <Project Path="src/Velocity.Core/Velocity.Core.csproj" />
+    <Project Path="src/Velocity.Data/Velocity.Data.csproj" />
+    <Project Path="src/Velocity.DownloadEngine/Velocity.DownloadEngine.csproj" />
+    <Project Path="src/Velocity.Services/Velocity.Services.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Velocity.Core.Tests/Velocity.Core.Tests.csproj" />
+    <Project Path="tests/Velocity.RestartHarness/Velocity.RestartHarness.csproj" />
+  </Folder>
+</Solution>

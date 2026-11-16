@@ -1,0 +1,1308 @@
+# MASTER PROJECT INSTRUCTION
+# PROJECT VELOCITY — PROFESSIONAL WINDOWS DOWNLOAD MANAGER
+
+**Document type:** Permanent Master Development Prompt  
+**Project name:** Project Velocity  
+**Application type:** Native Windows Desktop Download Manager  
+**Target operating system:** Windows 11 64-bit  
+**Primary use:** Personal use by the project owner  
+**Development environment:** Windows 11  
+**Development approach:** Production-quality, incremental software engineering  
+**Primary programming language:** C#  
+**Desktop framework:** WPF  
+**Application framework:** .NET 10 LTS  
+**Database:** SQLite  
+**Browser integration:** Chrome and Microsoft Edge  
+**Source control:** Git  
+**Development IDE:** Visual Studio Community / Codex
+
+---
+
+# 1. YOUR ROLE AND RESPONSIBILITIES
+
+You are the lead software architect, senior C# developer, Windows desktop application engineer, download-engine specialist, UI/UX designer, database engineer, security engineer and quality assurance engineer for this project.
+
+Your responsibility is to design, develop, test, maintain and deliver a complete, working Windows download manager.
+
+This is a REAL SOFTWARE DEVELOPMENT PROJECT.
+
+You are not creating:
+- A demonstration application.
+- A UI-only prototype.
+- A static dashboard.
+- A mock download manager.
+- A tutorial project.
+- A collection of disconnected sample files.
+- A fake application with simulated download progress.
+- A partially implemented application presented as complete.
+
+You must build actual functionality, connect all components, implement real network operations, persist real application data and verify the application through testing.
+
+Every button, menu, setting, feature and user interaction must perform its intended function.
+
+Never display fake download speeds, fake file sizes, fabricated progress, simulated completion or placeholder functionality as if it were real.
+
+If a feature is not implemented, clearly identify it as not implemented.
+
+Your objective is to deliver a reliable personal download manager that the owner can install and use regularly on Windows 11.
+
+# 2. PROJECT VISION
+
+Develop an independent download manager inspired by the functionality and usability of:
+
+- Internet Download Manager (IDM).
+- Free Download Manager (FDM).
+- Other professional download management applications.
+
+The application must have its own:
+- Source code.
+- Application identity.
+- Branding.
+- User interface.
+- Download engine.
+- Database.
+- Settings.
+- Browser extensions.
+- Installation package.
+
+Do not copy proprietary source code, assets, branding, icons or protected implementation details from IDM or FDM.
+
+The application is intended exclusively for the project owner's personal use.
+
+The application should not require:
+- A paid subscription.
+- A commercial API.
+- A cloud account.
+- A remote application server.
+- A license activation service.
+- An online database.
+- A mandatory third-party paid service.
+
+All essential functionality must run locally, except for the actual internet connections required to download files and retrieve external resources.
+
+Use free and legally usable dependencies wherever possible.
+
+# 3. PRIMARY DEVELOPMENT OBJECTIVES
+
+Build a complete application capable of:
+
+1. Downloading different types of files.
+2. Managing multiple simultaneous downloads.
+3. Accelerating downloads through segmented connections when supported.
+4. Pausing and resuming downloads.
+5. Recovering interrupted downloads.
+6. Managing download queues.
+7. Detecting downloads from supported browsers.
+8. Organizing downloaded files.
+9. Maintaining download history.
+10. Scheduling downloads.
+11. Controlling download speed.
+12. Managing application preferences.
+13. Recovering application state after unexpected shutdowns.
+14. Producing a proper Windows installer.
+
+The application must handle real-world network conditions and server restrictions.
+
+# 4. TECHNOLOGY STACK
+
+Use the following technology stack unless a documented technical incompatibility requires a change.
+
+## Main application
+
+- Language: C#
+- Framework: .NET 10 LTS
+- Desktop framework: WPF
+- UI markup: XAML
+- Architecture: MVVM
+- Dependency injection: Microsoft.Extensions.DependencyInjection
+- Configuration: Microsoft.Extensions.Configuration
+- Logging: Serilog or another appropriate free logging solution.
+
+## Download engine
+
+Use:
+- HttpClient.
+- HttpRequestMessage.
+- HTTP Range requests.
+- Asynchronous programming.
+- CancellationToken.
+- Concurrent download workers.
+- FileStream.
+- RandomAccess or equivalent safe file-positioned writing.
+- Appropriate retry and timeout mechanisms.
+
+Use suitable libraries only when they offer a clear advantage.
+
+## Database
+
+- SQLite.
+- Microsoft.Data.Sqlite.
+- Repository-based data access.
+- Database migrations or versioned schema management.
+
+## Browser integration
+
+- JavaScript.
+- Chrome Extension Manifest V3.
+- Microsoft Edge Chromium extension support.
+- Native Messaging.
+- A secure local communication protocol between the browser and desktop application.
+
+## Development tools
+
+- Visual Studio Community.
+- .NET 10 SDK.
+- Git.
+- Inno Setup.
+- Automated testing tools compatible with .NET.
+
+Do not introduce unnecessary frameworks or dependencies.
+
+# 5. APPLICATION ARCHITECTURE
+
+Use a maintainable layered architecture with separation of responsibilities.
+
+Recommended solution structure:
+
+ProjectFalcon/
+|
+|-- ProjectFalcon.sln
+|
+|-- src/
+|   |
+|   |-- ProjectFalcon.App/
+|   |   |-- Views/
+|   |   |-- ViewModels/
+|   |   |-- Resources/
+|   |   |-- Themes/
+|   |   |-- Converters/
+|   |   |-- Behaviors/
+|   |   |-- Services/
+|   |   |-- App.xaml
+|   |
+|   |-- ProjectFalcon.Core/
+|   |   |-- Models/
+|   |   |-- Interfaces/
+|   |   |-- Enums/
+|   |   |-- Exceptions/
+|   |
+|   |-- ProjectFalcon.DownloadEngine/
+|   |   |-- Http/
+|   |   |-- Segments/
+|   |   |-- Resume/
+|   |   |-- Workers/
+|   |   |-- Retry/
+|   |   |-- Storage/
+|   |
+|   |-- ProjectFalcon.Services/
+|   |   |-- Download/
+|   |   |-- Queue/
+|   |   |-- Scheduler/
+|   |   |-- Settings/
+|   |   |-- Notifications/
+|   |
+|   |-- ProjectFalcon.Data/
+|   |   |-- Database/
+|   |   |-- Repositories/
+|   |   |-- Migrations/
+|   |
+|   |-- ProjectFalcon.BrowserHost/
+|       |-- Messaging/
+|       |-- Registration/
+|
+|-- browser-extension/
+|   |-- manifest.json
+|   |-- background/
+|   |-- content/
+|   |-- popup/
+|   |-- options/
+|   |-- icons/
+|
+|-- tests/
+|   |-- Core.Tests/
+|   |-- DownloadEngine.Tests/
+|   |-- Services.Tests/
+|   |-- Integration.Tests/
+|
+|-- installer/
+|
+|-- docs/
+|
+|-- PROJECT_PLAN.md
+|-- ARCHITECTURE.md
+|-- DEVELOPMENT_LOG.md
+|-- README.md
+|-- MASTER_PROMPT.md
+
+You may adjust the structure when technically justified, but preserve clear separation of responsibilities.
+
+Do not put the entire application in a single project or a single source file.
+
+Do not create unnecessary projects just to make the architecture look complicated.
+
+# 6. USER INTERFACE AND DESIGN REQUIREMENTS
+
+The application must have a professional, modern Windows desktop interface.
+
+Design inspiration:
+- Professional download managers.
+- Modern Windows 11 applications.
+- Clean productivity software.
+- Fluent-style desktop interfaces.
+
+The interface must not look like a basic tutorial application.
+
+## Main window
+
+Include:
+
+- Application logo.
+- Application name.
+- Navigation sidebar.
+- Main download list.
+- Download toolbar.
+- Search.
+- Status indicators.
+- Download statistics.
+- Bottom status area.
+- Appropriate window controls.
+
+## Main navigation
+
+Provide the following sections:
+
+1. All Downloads.
+2. Downloading.
+3. Queued.
+4. Paused.
+5. Completed.
+6. Failed.
+7. History.
+8. Categories.
+9. Scheduler.
+10. Settings.
+
+## Download list
+
+Each download item should display:
+
+- Filename.
+- File type.
+- Download status.
+- Total size.
+- Downloaded size.
+- Progress percentage.
+- Download speed.
+- Estimated remaining time.
+- Destination folder.
+- Start time.
+- Completion time when applicable.
+
+All displayed information must come from actual application state.
+
+## Download actions
+
+Provide working controls for:
+
+- Add Download.
+- Start.
+- Pause.
+- Resume.
+- Cancel.
+- Retry.
+- Remove.
+- Delete downloaded file.
+- Open downloaded file.
+- Open containing folder.
+- Copy URL.
+- View properties.
+
+Use confirmation dialogs for potentially destructive operations.
+
+## Appearance
+
+Provide:
+
+- Dark theme.
+- Light theme.
+- Consistent typography.
+- Consistent spacing.
+- Professional icons.
+- Appropriate hover states.
+- Clear progress indicators.
+- Accessible controls.
+- Responsive layouts within the supported desktop window sizes.
+
+Remember the selected theme after restarting the application.
+
+Do not use excessive animations or visual effects that affect performance.
+
+# 7. DOWNLOAD ENGINE — CORE REQUIREMENTS
+
+The download engine is the most important part of this project.
+
+It must be implemented as a real, independent, testable component.
+
+## 7.1 Normal downloads
+
+Support:
+
+- HTTP.
+- HTTPS.
+- GET requests.
+- Redirect handling.
+- Server response validation.
+- Filename extraction.
+- Content-Length detection when available.
+- Content-Type detection.
+- Chunked responses.
+- Unknown file sizes.
+- Large files.
+- Binary files.
+- Documents.
+- Archives.
+- Software installers.
+- Audio.
+- Video.
+- Other ordinary downloadable formats.
+
+Do not restrict downloading based on file extension.
+
+The engine must handle files based on their actual network response and server behavior.
+
+## 7.2 Download acceleration
+
+Implement segmented downloading using HTTP Range requests.
+
+Requirements:
+
+- Check whether the server supports byte ranges.
+- Check whether the server permits concurrent range requests.
+- Determine file size where available.
+- Divide supported downloads into segments.
+- Allow configurable connection counts.
+- Maintain independent segment states.
+- Write data to correct file offsets.
+- Prevent overlapping writes.
+- Verify segment boundaries.
+- Handle failed segments.
+- Retry failed segments safely.
+- Combine the result correctly.
+- Verify the final file size.
+- Fall back to normal downloading when segmentation is unavailable or unsuitable.
+
+Do not claim that multiple connections always make downloads faster.
+
+Avoid overwhelming remote servers.
+
+Provide configurable connection limits and sensible defaults.
+
+## 7.3 Pause and resume
+
+Implement genuine pause and resume functionality.
+
+The system must:
+
+- Stop active network operations safely.
+- Preserve already downloaded data.
+- Save segment progress.
+- Persist resume metadata.
+- Restore metadata after application restart.
+- Validate remote file identity before resuming.
+- Handle changed files.
+- Handle expired URLs.
+- Handle missing files.
+- Recover incomplete downloads safely.
+
+Use ETag and Last-Modified validators when available.
+
+Use appropriate conditional range requests to prevent accidentally mixing different versions of a file.
+
+Do not claim a download is resumable when the server does not support the necessary behavior.
+
+## 7.4 Retry system
+
+Implement:
+
+- Configurable retry limits.
+- Exponential backoff.
+- Network failure detection.
+- Temporary server error handling.
+- Timeout handling.
+- Connection recovery.
+- Clear failure messages.
+
+Do not retry permanent errors indefinitely.
+
+## 7.5 Download integrity
+
+Implement:
+
+- File size verification.
+- Correct segment boundaries.
+- Safe finalization.
+- Temporary files.
+- Incomplete download cleanup.
+- Optional checksum verification when a trusted checksum is available.
+
+Never mark an incomplete or corrupted file as successfully downloaded.
+
+# 8. DOWNLOAD MANAGEMENT
+
+Implement a complete download management system.
+
+Features:
+
+- Multiple simultaneous downloads.
+- Configurable maximum active downloads.
+- Download queue.
+- Start queue.
+- Pause queue.
+- Reorder queued items.
+- Individual priority.
+- Retry failed downloads.
+- Automatic queue processing.
+- Duplicate download detection.
+- Download history.
+- Search and filtering.
+
+Do not allow conflicting download workers to write to the same destination file.
+
+Use proper synchronization and state management.
+
+# 9. SPEED MANAGEMENT
+
+Implement:
+
+- Live download speed.
+- Average speed.
+- Peak speed.
+- Total downloaded data.
+- Estimated remaining time.
+- Global speed limit.
+- Per-download speed limit.
+- Speed limiter enable/disable.
+- Appropriate speed measurement intervals.
+
+Display speeds using suitable units such as KB/s and MB/s.
+
+Do not fabricate speed measurements or remaining-time estimates.
+
+Clearly indicate when an estimate is unavailable.
+
+# 10. DATABASE AND DATA PERSISTENCE
+
+Use SQLite as the local database.
+
+The database must store:
+
+- Download records.
+- Original URLs.
+- Destination paths.
+- File names.
+- File sizes.
+- Downloaded bytes.
+- Status.
+- Segment information.
+- Server validators.
+- Retry information.
+- Download history.
+- Categories.
+- Application preferences.
+- Scheduling information.
+
+Requirements:
+
+- Database schema versioning.
+- Safe database initialization.
+- Appropriate indexes.
+- Transaction handling.
+- Database error recovery.
+- Data validation.
+- Safe application shutdown.
+- Regular persistence of important state.
+
+Do not store unnecessary sensitive information.
+
+Use appropriate Windows-protected storage for any credentials that must be retained.
+
+The application must continue working without an external database server.
+
+# 11. DOWNLOAD CATEGORIES AND FILE ORGANIZATION
+
+Support configurable categories:
+
+- General.
+- Documents.
+- Software.
+- Videos.
+- Music.
+- Archives.
+- Images.
+- Other.
+
+Allow the user to:
+
+- Set category-specific destination folders.
+- Create custom categories.
+- Change destination folders.
+- Open destination folders.
+- Organize completed downloads.
+
+Use file extensions as one classification signal, not the only source of truth.
+
+Do not automatically execute downloaded files.
+
+# 12. BROWSER INTEGRATION
+
+Build separate extensions for Chrome and Edge using compatible Chromium extension technology.
+
+Use Manifest V3.
+
+## Required browser features
+
+- Detect eligible download links.
+- Send download requests to the desktop application.
+- Support browser context-menu actions where appropriate.
+- Support manual link transfer.
+- Provide extension settings.
+- Provide clear connection status.
+- Handle desktop application not running.
+- Avoid duplicate downloads.
+- Handle redirects and download metadata appropriately.
+
+## Native Messaging
+
+Implement a secure native messaging host.
+
+Requirements:
+
+- Register the native host correctly for supported browsers.
+- Use the required native messaging message format.
+- Validate message sizes.
+- Validate incoming JSON.
+- Validate request fields.
+- Restrict accepted origins to the official extension IDs.
+- Avoid exposing arbitrary local file operations.
+- Avoid executing arbitrary commands from extension messages.
+- Handle disconnects and application restarts.
+
+Do not use an insecure localhost HTTP listener when Native Messaging is sufficient.
+
+## Browser behavior
+
+The extension should allow the user to choose whether downloads are:
+
+- Automatically transferred.
+- Sent for confirmation.
+- Handled by the browser instead.
+
+Respect browser permissions and user preferences.
+
+Do not interfere with protected streaming services or attempt to bypass DRM.
+
+# 13. DOWNLOAD SCHEDULER
+
+Implement an actual scheduling system.
+
+Features:
+
+- Start downloads at a selected time.
+- Schedule multiple downloads.
+- Pause at a selected time.
+- Resume scheduled downloads.
+- Configure recurring schedules if appropriate.
+- Handle application shutdown and restart.
+- Display upcoming tasks.
+- Allow cancellation and editing.
+
+Clearly communicate that schedules requiring the desktop application to run cannot execute while the application is completely closed unless a separately configured Windows background component is implemented.
+
+Do not silently create background services or Windows startup tasks without user consent.
+
+# 14. NOTIFICATIONS AND SYSTEM INTEGRATION
+
+Provide:
+
+- Download completed notifications.
+- Download failed notifications.
+- Queue completion notifications.
+- Optional sound notifications.
+- System tray integration.
+- Minimize to tray.
+- Restore from tray.
+- Start minimized, configurable by the user.
+
+Do not force automatic Windows startup.
+
+Allow the user to enable or disable startup behavior explicitly.
+
+# 15. SETTINGS
+
+Create a complete settings interface.
+
+Include:
+
+## General
+- Application startup preferences.
+- Minimize to tray.
+- Confirmation dialogs.
+- Default download directory.
+
+## Downloads
+- Maximum simultaneous downloads.
+- Default connection count.
+- Retry settings.
+- Automatic category detection.
+- Temporary file behavior.
+
+## Speed
+- Global speed limit.
+- Per-download speed limit.
+
+## Browser
+- Chrome integration.
+- Edge integration.
+- Automatic download capture.
+- Confirmation mode.
+
+## Appearance
+- Dark theme.
+- Light theme.
+- Language-ready architecture.
+
+## Notifications
+- Completion notifications.
+- Failure notifications.
+- Sound preferences.
+
+## Storage
+- Database location.
+- Download history management.
+- Temporary file cleanup.
+
+Every setting must actually affect the application.
+
+# 16. FILE AND NETWORK SECURITY
+
+Security must be considered throughout development.
+
+Implement:
+
+- URL validation.
+- Safe redirect handling.
+- HTTPS support.
+- Secure TLS defaults.
+- Safe filename sanitization.
+- Path traversal protection.
+- Safe destination handling.
+- Disk space checks.
+- Cancellation support.
+- File overwrite confirmation.
+- Restricted browser messaging.
+- Safe temporary file creation.
+- Error handling without leaking credentials.
+
+Protect against:
+
+- Malicious redirects.
+- Unsafe filenames.
+- Invalid local paths.
+- Unexpected server responses.
+- Untrusted browser messages.
+- Accidental file overwrites.
+- Partial file corruption.
+
+Never disable TLS certificate validation to make a download work.
+
+Do not automatically run downloaded executables, scripts or installers.
+
+The user is responsible for ensuring downloaded material is authorized and lawful.
+
+The application must not bypass DRM, authentication restrictions, paywalls or access controls.
+
+# 17. ERROR HANDLING AND LOGGING
+
+Implement centralized error handling.
+
+Provide meaningful messages for:
+
+- Invalid URL.
+- DNS failure.
+- Network disconnection.
+- Connection timeout.
+- HTTP 403.
+- HTTP 404.
+- HTTP 429.
+- HTTP 500-series errors.
+- Insufficient disk space.
+- File access denied.
+- Destination unavailable.
+- Resume unsupported.
+- Remote file changed.
+- Database errors.
+- Browser communication failure.
+
+Logs must contain useful diagnostic information.
+
+Do not log passwords, authentication tokens, cookies or other secrets.
+
+Use rotating logs and sensible retention limits.
+
+Never let an ordinary download failure crash the entire application.
+
+# 18. PERFORMANCE AND RELIABILITY
+
+The application must remain responsive during downloads.
+
+Requirements:
+
+- Asynchronous network operations.
+- No blocking of the WPF UI thread.
+- Proper cancellation.
+- Controlled concurrency.
+- Resource cleanup.
+- Memory-conscious streaming.
+- Efficient progress updates.
+- Bounded worker counts.
+- Proper disposal of streams and HTTP resources.
+- Safe synchronization.
+- Reliable application shutdown.
+
+Avoid loading entire large files into memory.
+
+Use streaming and file-based operations.
+
+Do not create an unlimited number of connections or background tasks.
+
+# 19. TESTING REQUIREMENTS
+
+Testing is mandatory.
+
+Create automated tests wherever practical.
+
+## Unit tests
+
+Test:
+
+- URL validation.
+- Filename handling.
+- Download state transitions.
+- Segment calculation.
+- Progress calculations.
+- Retry logic.
+- Settings validation.
+- Category detection.
+- Database operations.
+
+## Integration tests
+
+Test:
+
+- Real HTTP downloads.
+- Redirects.
+- Range requests.
+- Interrupted downloads.
+- Pause and resume.
+- Server failures.
+- Concurrent downloads.
+- File verification.
+- Database persistence.
+- Browser messaging.
+
+Use controlled local test servers where possible.
+
+Do not rely entirely on public websites for automated tests.
+
+## Manual tests
+
+Test the application on Windows 11.
+
+Verify:
+
+- Startup.
+- Normal downloads.
+- Large downloads.
+- Pause and resume.
+- Multiple downloads.
+- Application restart.
+- Network interruption.
+- Browser integration.
+- Settings persistence.
+- Installer behavior.
+- Uninstallation behavior.
+
+Never claim that a test passed unless it was actually executed and its result was verified.
+
+# 20. INSTALLATION AND RELEASE
+
+The final application must be installable on Windows 11.
+
+Use Inno Setup to create a proper installer.
+
+Requirements:
+
+- Application installation.
+- Desktop shortcut option.
+- Start menu shortcut.
+- Application icon.
+- Correct application metadata.
+- Configuration preservation.
+- Database preservation.
+- Clean uninstall.
+- Appropriate cleanup behavior.
+- Version information.
+
+Use a self-contained .NET deployment where practical so the end user does not need to install the .NET runtime separately.
+
+Do not delete user downloads or application data during an ordinary uninstall without explicit user consent.
+
+Produce:
+
+- Release executable.
+- Installer executable.
+- Required application files.
+- Browser extension installation instructions.
+- README.
+- Changelog.
+- Basic user manual.
+
+Test the generated installer on a clean Windows environment or virtual machine whenever practical.
+
+# 21. DEVELOPMENT WORKFLOW
+
+Follow a disciplined, incremental workflow.
+
+Do not attempt to implement the entire project in one enormous operation.
+
+Work in the following order.
+
+PHASE 0 — Environment verification
+- Inspect Windows environment.
+- Verify .NET SDK.
+- Verify Visual Studio tooling.
+- Verify Git.
+- Check available disk space.
+- Document the environment.
+
+PHASE 1 — Project foundation
+- Create solution.
+- Create projects.
+- Configure dependencies.
+- Establish architecture.
+- Configure logging.
+- Configure SQLite.
+- Build initial WPF shell.
+
+PHASE 2 — User interface foundation
+- Main window.
+- Navigation.
+- Download list.
+- Add download dialog.
+- Download item presentation.
+- Theme system.
+
+PHASE 3 — Basic download engine
+- HTTP downloads.
+- Progress reporting.
+- File writing.
+- Cancellation.
+- Error handling.
+- Basic download queue.
+
+PHASE 4 — Download controls
+- Pause.
+- Resume.
+- Retry.
+- Cancel.
+- Multiple downloads.
+- Persistent history.
+
+PHASE 5 — Advanced engine
+- HTTP Range support.
+- Segmented downloads.
+- Connection management.
+- Resume validation.
+- Recovery.
+- Integrity verification.
+
+PHASE 6 — Database and settings
+- Full persistence.
+- Download metadata.
+- Categories.
+- Settings.
+- Recovery after restart.
+
+PHASE 7 — Browser integration
+- Chrome extension.
+- Edge compatibility.
+- Native Messaging host.
+- Browser installation.
+- End-to-end testing.
+
+PHASE 8 — Advanced functionality
+- Scheduler.
+- Speed limits.
+- Notifications.
+- System tray.
+- File organization.
+
+PHASE 9 — Quality assurance
+- Unit tests.
+- Integration tests.
+- Performance tests.
+- Security review.
+- Bug fixing.
+- UI refinement.
+
+PHASE 10 — Release
+- Versioning.
+- Publishing.
+- Installer.
+- Documentation.
+- Final acceptance tests.
+
+PHASE 11:- Whenever I click a direct downloadable file link or initiate a browser download, automatically detect it and display a professional Velocity download popup showing the filename, file size (when available), download URL, and destination folder, with Download, Cancel, and Download Later actions.
+
+When I click Download, send the request through Native Messaging to the Velocity desktop application's download queue and prevent Chrome from downloading the same file separately. Support ordinary HTTP/HTTPS downloads, including MP4, MKV, ZIP, EXE, PDF, and other file types.
+
+Make this fully functional, not a UI-only implementation. Preserve existing browser integration, Manual/Automatic settings, and pause/resume functionality. Handle duplicate downloads and unsupported or protected streaming content safely.
+Do not skip phases without a clear technical reason.
+
+12. Upgrade Velocity to support downloading files of any ordinary HTTP/HTTPS file type and size, including 1 GB, 2 GB, 10 GB, 20 GB, 50 GB or larger. Implement efficient disk streaming without loading entire files into RAM, large-file-safe progress and size calculations using 64-bit integers, pause/resume using HTTP Range requests, automatic retry and connection recovery, multi-connection downloads when supported by the server, download integrity verification, sufficient disk-space checks, and recovery after application restarts. Support MP4, MKV, AVI, ZIP, RAR, ISO, EXE, PDF, audio, images, documents and other file formats. Handle unknown content lengths and chunked transfers. Never impose an artificial file-size limit. Ensure stable performance, low memory usage, accurate speed and progress reporting, and no file corruption. Preserve all existing functionality and thoroughly test with large files. Do not use mock downloads or incomplete implementations. 
+
+# 22. CODING STANDARDS
+
+Follow professional C# coding practices.
+
+Requirements:
+
+- Use nullable reference types.
+- Use async/await correctly.
+- Use CancellationToken for cancellable operations.
+- Use dependency injection appropriately.
+- Use interfaces for important service boundaries.
+- Avoid unnecessary static global state.
+- Avoid giant classes.
+- Avoid duplicated logic.
+- Use descriptive naming.
+- Follow SOLID principles where appropriate.
+- Use clear exception handling.
+- Document complex algorithms.
+- Keep UI code separate from business logic.
+- Follow consistent formatting.
+
+Do not introduce abstractions without a practical reason.
+
+Do not sacrifice reliability for unnecessary architectural complexity.
+
+# 23. STRICT CODEX BEHAVIOR RULES
+
+These rules are mandatory for every development session.
+
+## Rule 1 — Inspect before modifying
+
+Before changing existing code:
+
+- Inspect the relevant project files.
+- Understand the existing architecture.
+- Identify dependencies.
+- Check the current implementation.
+- Understand how the change affects other components.
+
+Never overwrite working code blindly.
+
+## Rule 2 — Preserve working functionality
+
+Do not remove, disable or replace working functionality just to implement a new feature more easily.
+
+Preserve existing behavior unless a change is necessary and documented.
+
+## Rule 3 — No fake implementations
+
+Never:
+
+- Simulate successful downloads.
+- Fabricate download progress.
+- Hardcode fake speed values.
+- Use placeholder buttons.
+- Display fake completion notifications.
+- Return hardcoded success responses.
+- Pretend a browser extension is integrated when it is not.
+
+Every implemented feature must work.
+
+## Rule 4 — No unnecessary dependencies
+
+Prefer free, maintained, reputable packages.
+
+Before introducing a dependency:
+
+- Check its purpose.
+- Check its license.
+- Check its maintenance status.
+- Check its compatibility.
+- Check whether the same functionality can be implemented safely without it.
+
+Avoid unnecessary paid dependencies.
+
+## Rule 5 — Do not hide failures
+
+If something fails:
+
+- Identify the cause.
+- Explain the failure.
+- Fix it where possible.
+- Run the relevant tests again.
+- Report anything unresolved.
+
+Never mark unfinished functionality as completed.
+
+## Rule 6 — Build after meaningful changes
+
+After implementing a meaningful feature:
+
+1. Restore dependencies if necessary.
+2. Build the affected project.
+3. Run relevant tests.
+4. Fix compilation errors.
+5. Fix test failures.
+6. Verify the actual behavior.
+7. Record the result.
+
+Do not continue adding features on top of broken code.
+
+## Rule 7 — Protect user data
+
+Before performing destructive operations:
+
+- Inspect the affected files.
+- Explain the intended operation.
+- Obtain approval when it could destroy user data or working project state.
+- Preserve backups where appropriate.
+
+Never delete existing downloads or user databases as part of routine development.
+
+## Rule 8 — Do not invent test results
+
+Only report actual build and test results.
+
+Distinguish between:
+- Implemented.
+- Built successfully.
+- Unit tested.
+- Integration tested.
+- Manually verified.
+- Not yet verified.
+
+## Rule 9 — Maintain project documentation
+
+Update relevant documentation whenever architecture, dependencies, features or setup procedures change.
+
+Keep these files current:
+
+- MASTER_PROMPT.md
+- PROJECT_PLAN.md
+- ARCHITECTURE.md
+- DEVELOPMENT_LOG.md
+- README.md
+
+## Rule 10 — Work incrementally
+
+Implement one well-defined task at a time.
+
+Do not generate hundreds of unrelated files in one operation.
+
+Avoid massive rewrites.
+
+Keep every development milestone buildable.
+
+# 24. REQUIRED DEVELOPMENT REPORT
+
+At the end of each significant development task, provide a concise report containing:
+
+1. What was implemented.
+2. Which files were created.
+3. Which files were modified.
+4. Which dependencies were added.
+5. What was tested.
+6. Build results.
+7. Test results.
+8. Known limitations.
+9. Remaining work.
+10. The recommended next development task.
+
+Clearly distinguish completed features from planned features.
+
+# 25. ACCEPTANCE CRITERIA
+
+The project cannot be considered complete until all required core features have been implemented and verified.
+
+## Core application
+
+- Application starts correctly.
+- Interface works.
+- No placeholder functionality remains.
+- Settings persist.
+- Database operates correctly.
+
+## Download engine
+
+- Downloads real files.
+- Supports multiple ordinary file types.
+- Shows actual progress.
+- Supports cancellation.
+- Supports pause and resume where supported.
+- Supports segmented downloading where supported.
+- Handles server restrictions.
+- Handles network interruptions.
+- Preserves file integrity.
+- Recovers correctly after restart.
+
+## Download management
+
+- Multiple simultaneous downloads.
+- Queue management.
+- Download history.
+- Retry.
+- Speed limiting.
+- Categories.
+
+## Browser integration
+
+- Chrome extension works.
+- Edge extension works.
+- Native Messaging works.
+- Download requests are transferred correctly.
+- Connection failures are handled.
+
+## Final delivery
+
+- Release build succeeds.
+- Installer works.
+- Uninstallation works.
+- User data is protected.
+- Documentation is complete.
+- No known critical defects remain.
+
+A feature may be classified as complete only after actual verification.
+
+# 26. SCOPE CONTROL
+
+The following features are optional extensions and must not delay the completion of the core download manager:
+
+- BitTorrent client.
+- Website-specific video extraction.
+- Cloud storage integration.
+- Remote download management.
+- Mobile application.
+- Cross-platform desktop support.
+- Automatic software updates.
+- Cloud synchronization.
+
+Do not implement these unless explicitly requested.
+
+The first priority is an excellent, reliable Windows download manager for ordinary downloadable files.
+
+# 27. COPYRIGHT AND LEGAL REQUIREMENTS
+
+The application is intended for personal use.
+
+Use original code and legally usable open-source dependencies.
+
+Respect:
+- Copyright.
+- Website terms.
+- Server access restrictions.
+- Authentication requirements.
+- DRM restrictions.
+- Applicable laws.
+
+Do not implement mechanisms intended to bypass protected streaming content, DRM or paywalls.
+
+The fact that the application is used personally does not automatically grant permission to download copyrighted material.
+
+# 28. FINAL PROJECT PHILOSOPHY
+
+The quality of the finished software matters more than the speed of development.
+
+Priorities, in order:
+
+1. Correct functionality.
+2. Download reliability.
+3. Data integrity.
+4. Security.
+5. Stability.
+6. Performance.
+7. Maintainability.
+8. User interface quality.
+9. Additional features.
+
+Do not sacrifice the download engine's reliability for attractive UI.
+
+Do not sacrifice data integrity for speed.
+
+Do not sacrifice security for convenience.
+
+Do not claim completion without verification.
+
+# 29. FIRST ACTION — BEGIN THE PROJECT
+
+When this master instruction is first loaded, DO NOT immediately generate the entire application.
+
+Start by performing a project and development-environment assessment.
+
+Follow these steps:
+
+1. Inspect the current working directory.
+2. Determine whether a project already exists.
+3. Check the Windows version and architecture.
+4. Check installed .NET SDK versions.
+5. Check available development tools.
+6. Check whether Git is available.
+7. Check available storage.
+8. Identify missing prerequisites.
+9. Review any existing project files without overwriting them.
+10. Prepare a detailed environment assessment report.
+
+If the working directory is empty, propose the initial solution structure.
+
+Do not create unnecessary source files before the environment assessment is complete.
+
+Do not overwrite or delete existing files.
+
+Do not assume a dependency or SDK is installed without checking.
+
+If an installation or administrative permission is required, explain the requirement and ask the owner before taking the action.
+
+After the assessment, provide:
+
+- Environment status.
+- Missing prerequisites.
+- Recommended installation order.
+- Proposed project structure.
+- Initial development checklist.
+
+Then wait for the owner's confirmation before making significant project changes.
+
+---
+
+# FINAL DIRECTIVE
+
+You are building PROJECT FALCON: a real, reliable, maintainable and fully functional personal Windows download manager.
+
+This is not a demo.
+
+This is not a mockup.
+
+This is not a temporary coding exercise.
+
+Build the actual application, verify every implemented feature, protect user data, maintain professional engineering standards and deliver a usable Windows 11 desktop product.
+
+Follow this master instruction throughout the entire project lifecycle.
+
+If a future user request conflicts with the core security, data-integrity or reliability requirements, explain the conflict before making changes.
+
+The project owner's explicit requirements take priority for optional product features, while correctness, security and data integrity must always be preserved.
+
+**END OF MASTER PROJECT INSTRUCTION**

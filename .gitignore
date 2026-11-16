@@ -1,0 +1,28 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+.vs/
+*.user
+*.suo
+
+# Build artifacts: the installer and portable build are published as GitHub release assets, not as source.
+# payload.zip is the packaged app that the setup project embeds into the installer; the build script writes it.
+artifacts/
+installer/bin/
+installer/obj/
+src/Velocity.Setup/payload.zip
+
+# Local databases, partial downloads and logs
+*.db
+*.db-shm
+*.db-wal
+*.part
+*.log
+
+# Freebuff workspace metadata
+.freebuff/
+
+# Node modules if any tooling is installed locally
+node_modules/

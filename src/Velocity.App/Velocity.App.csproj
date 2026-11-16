@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- The executable, the taskbar button and the notification-area icon all read this file. -->
+    <ApplicationIcon>..\..\icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep Windows Forms and System.Drawing out of global scope so WPF types stay unambiguous. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Drawing.Design" />
+    <Using Remove="System.Drawing.Drawing2D" />
+    <Using Remove="System.Drawing.Imaging" />
+    <Using Remove="System.Drawing.Text" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Velocity.Core\Velocity.Core.csproj" />
+    <ProjectReference Include="..\Velocity.Data\Velocity.Data.csproj" />
+    <ProjectReference Include="..\Velocity.Services\Velocity.Services.csproj" />
+    <ProjectReference Include="..\Velocity.DownloadEngine\Velocity.DownloadEngine.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\icon.png" Link="icon.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Embedded copy of the same artwork, so the tray icon is correct even if the .exe sits on a share. -->
+    <Resource Include="..\..\icon.ico" Link="icon.ico" />
+    <!-- Brand mark used by the in-app dialogs; embedded so it works no matter where the app starts from. -->
+    <Resource Include="..\..\small.png" Link="small.png" />
+  </ItemGroup>
+
+</Project>

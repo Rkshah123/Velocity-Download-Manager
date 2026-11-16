@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Velocity-Setup</AssemblyName>
+    <RootNamespace>Velocity.Setup</RootNamespace>
+    <ApplicationIcon>..\..\icon.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Written by artifacts/build-installer.ps1 just before this project is published. The condition keeps a
+         plain `dotnet build` of the project (and of the solution) working when no payload has been built yet. -->
+    <EmbeddedResource Include="payload.zip" Condition="Exists('payload.zip')" LogicalName="Velocity.Setup.payload.zip" />
+  </ItemGroup>
+
+</Project>

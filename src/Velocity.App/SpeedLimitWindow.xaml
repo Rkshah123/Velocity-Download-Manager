@@ -1,0 +1,74 @@
+<Window x:Class="Velocity.App.SpeedLimitWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Speed limit" Width="470" SizeToContent="Height" WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" Background="{DynamicResource WindowBackgroundBrush}"
+        Icon="pack://application:,,,/Velocity.App;component/small.png" ShowInTaskbar="False">
+    <Border Margin="16" Padding="22" Background="{DynamicResource CardBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14">
+        <StackPanel>
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}"
+                        VerticalAlignment="Top">
+                    <Path Data="{StaticResource IconGauge}" Width="18" Height="18" Stretch="Uniform"
+                          Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.6"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/>
+                </Border>
+                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                    <TextBlock Text="Speed limit" FontSize="19" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="FileText" Text="" FontSize="10.5" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource MutedTextBrush}"/>
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Text="Choose how fast this download may run, in MB/s. Other downloads keep their own speed, a change applies instantly while it runs, and the limit survives a restart."
+                       TextWrapping="Wrap" FontSize="11.5" Margin="0,0,0,16"
+                       Foreground="{DynamicResource SecondaryTextBrush}"/>
+
+            <TextBlock Text="LIMIT (MB/s)" Style="{StaticResource FieldLabelStyle}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="LimitBox" Style="{StaticResource InputBoxStyle}"
+                         Background="{DynamicResource CardAltBrush}"/>
+                <Button Grid.Column="1" Content="No limit" Style="{StaticResource SecondaryButtonStyle}"
+                        Click="NoLimitClick" Margin="8,0,0,0" Padding="14,0" Height="40"/>
+            </Grid>
+
+            <WrapPanel Margin="0,10,0,0">
+                <Button Content="0.5 MB/s" Style="{StaticResource GhostButtonStyle}" Tag="0.5" Click="PresetClick" Padding="10,5" FontSize="10.5"/>
+                <Button Content="1 MB/s" Style="{StaticResource GhostButtonStyle}" Tag="1" Click="PresetClick" Padding="10,5" FontSize="10.5" Margin="4,0,0,0"/>
+                <Button Content="2 MB/s" Style="{StaticResource GhostButtonStyle}" Tag="2" Click="PresetClick" Padding="10,5" FontSize="10.5" Margin="4,0,0,0"/>
+                <Button Content="5 MB/s" Style="{StaticResource GhostButtonStyle}" Tag="5" Click="PresetClick" Padding="10,5" FontSize="10.5" Margin="4,0,0,0"/>
+                <Button Content="10 MB/s" Style="{StaticResource GhostButtonStyle}" Tag="10" Click="PresetClick" Padding="10,5" FontSize="10.5" Margin="4,0,0,0"/>
+                <Button Content="25 MB/s" Style="{StaticResource GhostButtonStyle}" Tag="25" Click="PresetClick" Padding="10,5" FontSize="10.5" Margin="4,0,0,0"/>
+            </WrapPanel>
+
+            <Border Background="{DynamicResource CardAltBrush}" BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="9" Padding="12,9" Margin="0,14,0,0">
+                <TextBlock x:Name="HintText" Text="" TextWrapping="Wrap" FontSize="11"
+                           Foreground="{DynamicResource MutedTextBrush}"/>
+            </Border>
+
+            <Border x:Name="ErrorPanel" Visibility="Collapsed" Background="{DynamicResource DangerSoftBrush}"
+                    BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1" CornerRadius="9"
+                    Padding="12,9" Margin="0,12,0,0">
+                <TextBlock x:Name="ErrorText" Foreground="{DynamicResource DangerBrush}" FontSize="11.5"
+                           TextWrapping="Wrap"/>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="Cancel" Style="{StaticResource SecondaryButtonStyle}" Click="CancelClick"
+                        Padding="16,9" Margin="0,0,8,0" IsCancel="True"/>
+                <Button Content="Apply" Style="{StaticResource PrimaryButtonStyle}" Click="ApplyClick"
+                        Padding="20,9" IsDefault="True"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>
