@@ -830,3 +830,20 @@ Verified: `artifacts/e2e/popup-regression.js` (13 checks) — no card or pill on
 any interaction is not offered, scrolling does not unlock offers, a click does unlock them, the offered file is
 remembered and is not offered again after a refresh or a browser restart. `artifacts/e2e/detect.js`: 99 checks, all
 passed (hover buttons, network offer after interaction, click-to-send, stream strip, fullscreen, exclusions).
+
+## Round 20 — a download Chrome replays at startup is not a new download
+
+The screenshot (`pop.png`) showed the offer in the extension's standalone window with a blank new tab behind it, for
+`pub-d888f9ac9b9f48ec9cfd894703c927c5.r2.dev/979569a9838fd8cd906226c7b1b51ecc` — the item Chrome has kept in its own
+download list since Nov 9. Chrome retries downloads it still holds when it starts; each retry was captured, offered,
+cancelled and left interrupted, so the next start offered the whole queue again, one prompt after another.
+
+`takeOver` now treats a captured download whose own `startTime` is more than two minutes old as a replay, not a new
+request: the browser's copy is still cancelled, the file is recorded as declined, and nothing is offered. And
+declining an offer is now recorded for the captured-download path too (`downloadedFiles` … `how: "declined"`), so a
+later retry of that exact file is cancelled silently instead of asking again. Both rules only affect the interception
+path; clicking a link or starting a download yourself is unchanged.
+
+Verified: `artifacts/e2e/declined-downloads.js` (5 checks) — the decline is recorded, the same download started again
+is not offered and opens no offer window, while Chrome's copy is still cancelled. `artifacts/e2e/popup-regression.js`
+13/13 and `artifacts/e2e/detect.js` all passed with the same build.

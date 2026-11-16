@@ -654,6 +654,9 @@ async function createCenteredPopup(url, width, height) {
 // for the file again, and re-downloading on purpose is allowed.
 const DOWNLOADED_KEY = "downloadedFiles";
 const DOWNLOADED_LIMIT = 1000;
+// A download whose own start time is this much older than now is one the browser restored from an earlier session,
+// not something the user just clicked.
+const RESTORED_DOWNLOAD_MS = 2 * 60 * 1000;
 // Query parameters that carry a signature or expiry, never the identity of the file itself.
 const VOLATILE_PARAM = /^(exp|expires|expire|token|auth|auth_key|signature|sig|policy|key-pair-id|x-amz-[a-z-]+|hdnts|hdnea|begin|start|end|timestamp|time|ts|_|cb|nocache|rand)$/i;
 
@@ -691,6 +694,12 @@ async function isAlreadyDownloaded(url) {
   if (!url) return false;
   const map = await downloadedMap();
   return Boolean(map[fileIdentity(url)]);
+}
+
+async function downloadRecord(url) {
+  if (!url) return null;
+  const map = await downloadedMap();
+  return map[fileIdentity(url)] || null;
 }
 
 async function rememberDownload(url, how) {
@@ -849,6 +858,9 @@ async function handleAction(request) {
     // The browser's copy was cancelled when the offer was made, so dismissing the offer simply ends the request.
     // Chrome is never asked to start, resume or keep it.
     await finishOffer(details, { drop: true });
+    // The user said no to this file. Remembering that is what stops the browser's own retry of the same download from
+    // asking again the next time it starts.
+    await rememberDownload(details.url, "declined");
     return { ok: true, cancelled: true };
   }
 
@@ -927,6 +939,27 @@ async function takeOver(item) {
   const duplicate = hasLiveOffer(url) || (recent.has(url) && Date.now() - recent.get(url) < DEDUPE_MS);
   await cancelBrowserDownload(item.id);
   if (duplicate) return;
+
+  // A download Chrome resumes on its own is not a download the user just asked for. When the browser starts it
+  // retries what its own list still holds as resumable — including items this extension cancelled at the user's
+  // request — so a captured item whose own start time is old is a replay, not a new download. Offering those is what
+  // produced a queue of prompts one after another at every browser start, so it is cancelled and remembered as
+  // declined instead.
+  const startedAt = Date.parse(item.startTime || "");
+  if (Number.isFinite(startedAt) && Date.now() - startedAt > RESTORED_DOWNLOAD_MS) {
+    stats.declinedRestored = (stats.declinedRestored || 0) + 1;
+    await rememberDownload(url, "declined");
+    holdOffer(url);
+    return;
+  }
+
+  // The user already declined this exact file: cancelling the browser's copy is still right, but asking again is not.
+  const known = await downloadRecord(url);
+  if (known?.how === "declined") {
+    holdOffer(url);
+    return;
+  }
+
   stats.captured++;
 
   recent.set(url, Date.now());
