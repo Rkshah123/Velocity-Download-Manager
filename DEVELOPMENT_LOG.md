@@ -784,3 +784,27 @@ New `SpeedLimitAccuracyTests` (2 tests, measuring real throughput and 4 connecti
 
 One honest limit: per-second samples still swing ±10–15% because Windows and the network buffer bytes in flight;
 the average the transfer achieves tracks the chosen ceiling, which is what a rate limiter can promise.
+
+## Round 18 — the extension only offers what the user asks for
+
+The reports were: opening Chrome, opening a site or refreshing a page brought Velocity's download offer up again for
+files already downloaded. Two mechanisms did it, both in the extension:
+
+1. **The page re-presented a saved offer on every load.** `content.js` sent `velocity-hello` on load and the worker
+   answered with whatever offer it still held for that tab (`storage.session`, key `pending`). So every reload — and
+   every restored tab at browser start — rendered the card again with no click. Removed the whole handshake: the
+   message case, `readPending`/`writePending`/`rememberPending`/`forgetPending`, the `pending` key, and the calls in
+   `pumpOffers`, `finishOffer` and `takeOver`. A download is offered once, by the worker, when it is captured.
+2. **Passive detection had no memory.** `inspectNetworkResponse` told the page about every file-like response on
+   every page load, and nothing recorded that the file had already been downloaded (or already offered), so a page
+   that fetches a document, or a player that reloads its playlist, produced the same offer each time. Added a
+   persistent ledger in `storage.local` (`downloadedFiles`, 1000 entries, signature parameters dropped from the
+   identity) written when Velocity takes a download, when Chrome finishes one on its own, and when a network file is
+   first offered. Passive detection consults it before sending anything to a page; a deliberate click or a download
+   the user starts is never filtered, so nothing became un-downloadable.
+
+Verified in a real Chrome with the real extension (`artifacts/e2e/popup-regression.js`): opening and refreshing a
+page shows no card and no pill, a file the page fetches is still offered once, refreshing does not offer it again,
+the record survives a browser restart (same profile, fresh process) so it is not offered again, no card appears after
+that restart, and the handshake is gone from the source. `artifacts/e2e/detect.js` still passes every check with the
+changed extension — hover buttons, network offer, click-to-send, stream strip, fullscreen, exclusions.

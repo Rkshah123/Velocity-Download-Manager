@@ -505,10 +505,10 @@
     return;
   });
 
-  // Re-offer a paused download whose page has just been reloaded.
-  api.runtime.sendMessage({ type: "velocity-hello" })
-    .then(response => { if (response?.pending) show(response.pending); })
-    .catch(() => { /* the worker starts on demand */ });
+  // A page never asks for an offer it did not just receive. Velocity used to re-present an unanswered offer here on
+  // every load, so simply refreshing a page — or restoring it when the browser started — popped the card up again
+  // for a file the user had already seen. A download is offered once, by the worker, at the moment it is captured;
+  // the page renders that message and nothing else automatically.
 
   // Escape closes the offer even after a click elsewhere on the page moved focus out of the card.
   globalThis.addEventListener("keydown", event => {

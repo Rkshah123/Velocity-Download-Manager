@@ -15,7 +15,6 @@ const isFirefox = typeof globalThis.browser !== "undefined";
 
 const HOST = "com.velocity.download_manager";
 const DEDUPE_MS = 8000;
-const PENDING_KEY = "pending";
 const ORPHANS_KEY = "orphanDownloads";
 
 const DEFAULTS = { intercept: true, ask: true, detect: true, excluded: [], theme: "auto" };
@@ -523,6 +522,12 @@ async function inspectNetworkResponse(details) {
   const options = await getOptions();
   if (!options.detect || isExcluded(url, options.excluded)) return;
 
+  // Passive detection is where the repeated popups came from: a page that fetches a file — a document preview, a
+  // player reloading its playlist, a script reloading a signed link — looked like a brand new download on every
+  // load, because nothing remembered what had already been downloaded. This is that memory, and it is consulted
+  // before any pill, strip or property update is sent to the page.
+  if (await isAlreadyDownloaded(url)) return;
+
   const headers = details.responseHeaders || [];
   const disposition = headerValue(headers, "content-disposition");
   const type = headerValue(headers, "content-type").split(";")[0].trim().toLowerCase();
@@ -551,6 +556,8 @@ async function inspectNetworkResponse(details) {
     const item = { url, name: filenameFromUrl(url), size: null, type, site: safeHost(url), kind: "stream", resumable: false };
     tabStreams.set(details.tabId, item);
     if (tabStreams.size > 60) tabStreams.delete(tabStreams.keys().next().value);
+    // A manifest belongs to the player that is on screen, so it is offered while that video is playing and stops
+    // for good once the video was actually downloaded (isAlreadyDownloaded above).
     try { await api.tabs.sendMessage(details.tabId, { type: "velocity-detected", item }); } catch { /* no detector */ }
     return;
   }
@@ -577,6 +584,9 @@ async function inspectNetworkResponse(details) {
     kind: "network"
   };
 
+  // A file the page fetched by itself is offered once and remembered as offered: a refresh, a retry or a later page
+  // that requests the same file again stays quiet instead of popping the same offer up repeatedly.
+  await rememberDownload(url, "offered");
   try { await api.tabs.sendMessage(details.tabId, { type: "velocity-detected", item }); } catch { /* tab has no detector */ }
 }
 
@@ -633,19 +643,70 @@ async function createCenteredPopup(url, width, height) {
   await api.windows.create(options);
 }
 
-/* ─────────────────────────── pending offers ─────────────────────────── */
+/* ─────────────────────────── what was already downloaded ─────────────────────────── */
 
-async function readPending() {
+// The one thing the extension has to remember across page loads and browser restarts: a file Velocity (or Chrome)
+// already delivered. Passive detection — the response sniffer and the restored video strip — consults this before
+// offering anything, which is what stops the same downloaded file from appearing again on every page load. It is
+// deliberately storage.local and not storage.session: a browser restart must not forget the list.
+//
+// A deliberate click on a file link, or a download Chrome starts, is never filtered by it: those are the user asking
+// for the file again, and re-downloading on purpose is allowed.
+const DOWNLOADED_KEY = "downloadedFiles";
+const DOWNLOADED_LIMIT = 1000;
+// Query parameters that carry a signature or expiry, never the identity of the file itself.
+const VOLATILE_PARAM = /^(exp|expires|expire|token|auth|auth_key|signature|sig|policy|key-pair-id|x-amz-[a-z-]+|hdnts|hdnea|begin|start|end|timestamp|time|ts|_|cb|nocache|rand)$/i;
+
+let downloadedCache = null;
+
+// The same file requested again with a fresh signature is the same file, so volatile parameters are dropped before
+// anything is compared or stored.
+function fileIdentity(value) {
   try {
-    const stored = await api.storage.session.get(PENDING_KEY);
-    return stored?.[PENDING_KEY] ?? {};
+    const url = new URL(String(value));
+    const query = [...url.searchParams.entries()]
+      .filter(([name]) => !VOLATILE_PARAM.test(name))
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, text]) => `${name}=${text}`)
+      .join("&");
+    return `${url.origin}${url.pathname}${query ? `?${query}` : ""}`;
   } catch {
-    return {};
+    return String(value || "");
   }
 }
 
-async function writePending(map) {
-  try { await api.storage.session.set({ [PENDING_KEY]: map }); } catch { /* best effort */ }
+async function downloadedMap() {
+  if (downloadedCache) return downloadedCache;
+  try {
+    const stored = await api.storage.local.get({ [DOWNLOADED_KEY]: {} });
+    const value = stored?.[DOWNLOADED_KEY];
+    downloadedCache = value && typeof value === "object" ? value : {};
+  } catch {
+    downloadedCache = {};
+  }
+  return downloadedCache;
+}
+
+async function isAlreadyDownloaded(url) {
+  if (!url) return false;
+  const map = await downloadedMap();
+  return Boolean(map[fileIdentity(url)]);
+}
+
+async function rememberDownload(url, how) {
+  const key = fileIdentity(url);
+  if (!key) return;
+  const map = await downloadedMap();
+  map[key] = { at: Date.now(), how: how || "velocity" };
+
+  // Oldest entries go first, so the list stays bounded without losing what was downloaded recently.
+  const keys = Object.keys(map);
+  if (keys.length > DOWNLOADED_LIMIT) {
+    keys.sort((left, right) => (map[left]?.at || 0) - (map[right]?.at || 0));
+    for (const key of keys.slice(0, keys.length - DOWNLOADED_LIMIT)) delete map[key];
+  }
+
+  try { await api.storage.local.set({ [DOWNLOADED_KEY]: map }); } catch { /* best effort */ }
 }
 
 // One prompt at a time, everywhere. Two downloads that arrive together must not fight over a single card: the
@@ -669,7 +730,6 @@ async function pumpOffers() {
   const next = offerQueue.shift();
   offerActive = next;
   stats.offered++;
-  await rememberPending(next.tabId, next.details);
   clearTimeout(offerExpiry);
   offerExpiry = setTimeout(() => { void finishOffer(next.details); }, OFFER_TTL_MS);
   try {
@@ -697,7 +757,6 @@ async function finishOffer(details, options = {}) {
     clearTimeout(offerExpiry);
     offerExpiry = null;
     releaseOffer(current.details.url);
-    await forgetPending(current.tabId);
     void pumpOffers();
     return;
   }
@@ -711,20 +770,6 @@ async function finishOffer(details, options = {}) {
     offerQueue.splice(queued, 1);
     stats.droppedByDecision++;
   }
-}
-
-async function rememberPending(tabId, details) {
-  if (typeof tabId !== "number" || tabId < 0) return;
-  const map = await readPending();
-  map[tabId] = details;
-  await writePending(map);
-}
-
-async function forgetPending(tabId) {
-  if (typeof tabId !== "number" || tabId < 0) return;
-  const map = await readPending();
-  delete map[tabId];
-  await writePending(map);
 }
 
 async function removeOrphan(id) {
@@ -813,6 +858,7 @@ async function handleAction(request) {
   if (decision === "browser") {
     await finishOffer(details, { drop: true });
     const started = await startBrowserDownload(details.url, details.name);
+    if (started) await rememberDownload(details.url, "chrome");
     return started ? { ok: true, browser: true } : { ok: false, error: "Chrome refused to start that download." };
   }
 
@@ -831,6 +877,7 @@ async function handleAction(request) {
     // than silently lost; that is a fresh request, never a resumed download.
     await finishOffer(details, { drop: true });
     const restored = await startBrowserDownload(details.url, details.name);
+    if (restored) await rememberDownload(details.url, "chrome");
     return {
       ok: false,
       error: `${host?.error || "Velocity did not accept the download."}${restored ? " Chrome is downloading it instead." : ""}`
@@ -839,6 +886,8 @@ async function handleAction(request) {
 
   await finishOffer(details);
   hostCache = { at: 0, value: null };
+  // Velocity owns the file now: it is a download in progress, and it must never be offered again as new.
+  await rememberDownload(details.url, "velocity");
   return { ok: true, launched: Boolean(host.launched), destination: host.destination || "" };
 }
 
@@ -851,6 +900,17 @@ api.downloads.onCreated.addListener(item => {
     stats.offerFailures++;
     console.warn("Velocity could not offer a download", error);
   });
+});
+
+// A download Chrome finishes on its own — "Keep in Chrome", a file Velocity was never offered, an excluded site — is
+// a file the user already has. Recording it is what keeps the sniffer from offering it again on a later page load,
+// across browser restarts too. Captured downloads never reach this state: their browser copy is cancelled.
+api.downloads.onChanged.addListener(delta => {
+  if (delta?.state?.current !== "complete") return;
+  void findDownload(delta.id).then(item => {
+    if (item?.url) return rememberDownload(item.url, "chrome");
+    return null;
+  }).catch(() => { /* observation only */ });
 });
 
 // Every download Chrome starts on its own is captured here. The browser's copy is cancelled first and probed
@@ -915,7 +975,6 @@ async function takeOver(item) {
     takenOver: true
   };
   if (!options.ask) {
-    await rememberPending(tabId, details);
     const outcome = await handleAction({ action: "start", details, tabId });
     flashBadge(outcome.ok ? "✓" : "!");
     return;
@@ -1195,17 +1254,6 @@ async function handleMessage(message, sender, tabId) {
       return { ok: true, stream: tabStreams.get(tabId) || null };
     }
 
-    case "velocity-hello": {
-      // A reloaded page asks whether an offer is still waiting for it.
-      const options = await getOptions();
-      if (!options.intercept) return { ok: true, pending: null };
-      const map = await readPending();
-      const pending = map[tabId];
-      if (!pending) return { ok: true, pending: null };
-      // The offer stays valid until it is answered: the browser download behind it no longer exists.
-      return { ok: true, pending };
-    }
-
     case "velocity-inspect": {
       const options = await getOptions();
       const host = await getHost();
@@ -1311,7 +1359,6 @@ api.tabs.onRemoved.addListener(tabId => {
     for (const entry of offerQueue) if (entry.tabId === tabId) entry.tabId = -1;
     if (offerActive?.tabId === tabId) {
       offerActive.tabId = -1;
-      await forgetPending(tabId);
       void present(-1, offerActive.details);
     }
   })();
