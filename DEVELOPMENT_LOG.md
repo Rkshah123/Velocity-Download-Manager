@@ -847,3 +847,23 @@ path; clicking a link or starting a download yourself is unchanged.
 Verified: `artifacts/e2e/declined-downloads.js` (5 checks) — the decline is recorded, the same download started again
 is not offered and opens no offer window, while Chrome's copy is still cancelled. `artifacts/e2e/popup-regression.js`
 13/13 and `artifacts/e2e/detect.js` all passed with the same build.
+
+## Round 21 — "downloaded it, restarted, it asked again": one rule, tested
+
+The remaining case was a file the user *did* download: restart Chrome once and the offer appeared one time, then not
+again once it was cancelled. The previous rule only skipped captures the user had *declined*; a file already taken by
+Velocity was still offered if Chrome replayed it.
+
+The decision now lives in its own file, `capture-decision.js`, loaded by the worker with `importScripts` and asserted
+directly by `artifacts/e2e/capture-decision.js`:
+
+* **Same download item** — every id the extension cancels is stored (`cancelledDownloads`, 300 ids, `storage.local`).
+  Chrome reuses an item's id when it retries an interrupted download, so a capture with a known id is a replay: it is
+  cancelled and never offered, on every future start.
+* **Old start time, or no page behind it** — a capture that is more than two minutes old, or has no tab, cannot be a
+  fresh choice, so it is not offered.
+* **Known file** — a URL already recorded as taken, offered or declined is not offered again when it arrives without a
+  page. A fresh download started from a page is still offered, so re-downloading on purpose keeps working.
+
+Verified: `artifacts/e2e/capture-decision.js` 8/8; `artifacts/e2e/declined-downloads.js` all checks passed;
+`artifacts/e2e/popup-regression.js` all checks passed; `artifacts/e2e/detect.js` all checks passed.

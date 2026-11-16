@@ -13,6 +13,10 @@
 const api = globalThis.browser ?? globalThis.chrome;
 const isFirefox = typeof globalThis.browser !== "undefined";
 
+// The rule that decides whether a captured download is offered or cancelled quietly, in its own file so it can be
+// exercised outside the browser as well (artifacts/e2e/capture-decision.js).
+try { importScripts("capture-decision.js"); } catch { /* already loaded in this worker */ }
+
 const HOST = "com.velocity.download_manager";
 const DEDUPE_MS = 8000;
 const ORPHANS_KEY = "orphanDownloads";
@@ -654,9 +658,34 @@ async function createCenteredPopup(url, width, height) {
 // for the file again, and re-downloading on purpose is allowed.
 const DOWNLOADED_KEY = "downloadedFiles";
 const DOWNLOADED_LIMIT = 1000;
-// A download whose own start time is this much older than now is one the browser restored from an earlier session,
-// not something the user just clicked.
-const RESTORED_DOWNLOAD_MS = 2 * 60 * 1000;
+// Every download item this extension cancelled. Chrome reuses an item's id when it retries it, so this list is the
+// reliable way to recognise a replay; it lives in storage so it survives browser restarts.
+const CANCELLED_KEY = "cancelledDownloads";
+const CANCELLED_LIMIT = 300;
+let cancelledCache = null;
+
+async function primeCancelled() {
+  try {
+    const stored = await api.storage.local.get({ [CANCELLED_KEY]: [] });
+    cancelledCache = Array.isArray(stored?.[CANCELLED_KEY]) ? stored[CANCELLED_KEY] : [];
+  } catch {
+    cancelledCache = [];
+  }
+}
+
+function cancelledSnapshot() {
+  return Array.isArray(cancelledCache) ? cancelledCache : [];
+}
+
+async function rememberCancelled(id) {
+  if (!Number.isInteger(id)) return;
+  const next = [id, ...cancelledSnapshot().filter(value => value !== id)].slice(0, CANCELLED_LIMIT);
+  cancelledCache = next;
+  try { await api.storage.local.set({ [CANCELLED_KEY]: next }); } catch { /* best effort */ }
+}
+
+// Read once when the worker starts, so cancelling a download never waits on storage.
+void primeCancelled();
 // Query parameters that carry a signature or expiry, never the identity of the file itself.
 const VOLATILE_PARAM = /^(exp|expires|expire|token|auth|auth_key|signature|sig|policy|key-pair-id|x-amz-[a-z-]+|hdnts|hdnea|begin|start|end|timestamp|time|ts|_|cb|nocache|rand)$/i;
 
@@ -809,6 +838,7 @@ async function removeOrphan(id) {
 async function cancelBrowserDownload(id) {
   // Issued in the same task as the notification, so the browser's copy stops as early as it always did.
   await downloadsCall("cancel", id);
+  await rememberCancelled(id);
 
   // Wait until Chrome itself agrees the item is no longer transferring. Nothing is deleted afterwards.
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -937,25 +967,21 @@ async function takeOver(item) {
   if (!optionCache.intercept || isExcluded(url, optionCache.excluded)) return;
 
   const duplicate = hasLiveOffer(url) || (recent.has(url) && Date.now() - recent.get(url) < DEDUPE_MS);
+  // Read before this item is cancelled: its own id must not count as evidence of a replay of itself.
+  const previouslyCancelled = cancelledSnapshot();
   await cancelBrowserDownload(item.id);
   if (duplicate) return;
 
-  // A download Chrome resumes on its own is not a download the user just asked for. When the browser starts it
-  // retries what its own list still holds as resumable — including items this extension cancelled at the user's
-  // request — so a captured item whose own start time is old is a replay, not a new download. Offering those is what
-  // produced a queue of prompts one after another at every browser start, so it is cancelled and remembered as
-  // declined instead.
-  const startedAt = Date.parse(item.startTime || "");
-  if (Number.isFinite(startedAt) && Date.now() - startedAt > RESTORED_DOWNLOAD_MS) {
+  // Chrome retries downloads from its own list when it starts, and this extension cancelled most of them because the
+  // user either took the file or said no. Those are replays, not new requests: the same item id, an old start time or
+  // no page behind them. They are cancelled quietly and never offered again, which is what ends the queue of prompts
+  // at every browser start — including a file the user downloaded a moment ago.
+  const record = await downloadRecord(url);
+  const decide = globalThis.VelocityCapture?.shouldOfferCapture;
+  const decision = typeof decide === "function" ? decide(item, record, previouslyCancelled, Date.now()) : "offer";
+  if (decision !== "offer") {
     stats.declinedRestored = (stats.declinedRestored || 0) + 1;
-    await rememberDownload(url, "declined");
-    holdOffer(url);
-    return;
-  }
-
-  // The user already declined this exact file: cancelling the browser's copy is still right, but asking again is not.
-  const known = await downloadRecord(url);
-  if (known?.how === "declined") {
+    if (!record) await rememberDownload(url, "declined");
     holdOffer(url);
     return;
   }
