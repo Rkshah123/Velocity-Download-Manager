@@ -32,6 +32,11 @@
   const Z_INDEX = "2147483000";
   // Remembers the quality the user picked per site, so the strip's own click keeps using that source.
   const PREF_KEY = "preferredMedia";
+  // Files the user closed on their own. This outlives the page and the browser: a file the user dismissed must never
+  // pop back up on the next start, however the site re-requests it.
+  const DISMISS_KEY = "dismissedOffers";
+  const DISMISS_LIMIT = 500;
+  const INTERACTION_TYPES = ["pointerdown", "mousedown", "keydown", "touchstart"];
 
   // Hints only decide whether a URL is worth a probe; the response decides whether a button appears.
   const STREAM_HINT = /\.(m3u8|mpd|m4s|ts)(?:$|[?#])/i;
@@ -70,8 +75,19 @@
     frame: 0,
     observer: null,
     media: null,
-    started: false
+    started: false,
+    // True once the user has actually done something on this page. Passive offers are held back until then: a page
+    // that fetches a file while it loads (a restored tab, a preview, a player preloading the next episode) is not the
+    // user asking for a download, and offering it is what made offers appear every time the browser started.
+    interacted: false
   };
+
+  function markInteracted() {
+    if (state.interacted) return;
+    state.interacted = true;
+    // Something the page already fetched may be worth offering now that the user is here.
+    sweepMedia();
+  }
 
   /* ─────────────────────────── messaging ─────────────────────────── */
 
@@ -511,7 +527,7 @@
     close.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      state.dismissed.add(record.details.url);
+      dismiss(record.details.url);
       hideRecord(record, true);
     });
 
@@ -772,7 +788,7 @@
     close.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      if (primary.url) state.dismissed.add(primary.url);
+      dismiss(primary.url);
       hideRecord(record, true);
     });
     close.addEventListener("pointerdown", event => event.stopPropagation());
@@ -849,11 +865,30 @@
 
   async function loadPreferences() {
     try {
-      const stored = await api.storage.local.get({ [PREF_KEY]: {} });
+      const stored = await api.storage.local.get({ [PREF_KEY]: {}, [DISMISS_KEY]: [] });
       const value = stored?.[PREF_KEY];
       state.preferred = value && typeof value === "object" ? value : {};
+      const dismissed = stored?.[DISMISS_KEY];
+      if (Array.isArray(dismissed)) for (const url of dismissed) if (url) state.dismissed.add(url);
     } catch {
       // Preferences are a convenience: without them the strip simply offers the list again.
+    }
+  }
+
+  // A dismissal is remembered in storage, so closing an offer really ends it: reloading the page or restarting the
+  // browser must not bring the same file back.
+  function dismiss(url) {
+    if (!url) return;
+    state.dismissed.add(url);
+    try {
+      const write = api.storage.local.get({ [DISMISS_KEY]: [] }).then(stored => {
+        const list = Array.isArray(stored?.[DISMISS_KEY]) ? stored[DISMISS_KEY] : [];
+        const next = [url, ...list.filter(entry => entry !== url)].slice(0, DISMISS_LIMIT);
+        return api.storage.local.set({ [DISMISS_KEY]: next });
+      });
+      if (write?.catch) write.catch(() => { /* best effort */ });
+    } catch {
+      // Storage can be unavailable while the worker restarts; the dismissal then lasts for this page only.
     }
   }
 
@@ -1244,6 +1279,9 @@
 
   function showNetwork(item) {
     if (!item?.url) return;
+    // A file the page fetched on its own is only offered after the user did something on the page. Manifests are the
+    // exception: they describe the video that is playing on screen, and their strip is attached to that video.
+    if (item.kind !== "stream" && !state.interacted) return;
     // A manifest is not a file to offer in a corner: it is the video behind the player, so it is attached to
     // that player and its declared qualities fill the strip's own menu.
     if (item.kind === "stream") {
@@ -1630,6 +1668,11 @@
     document.addEventListener("pointerover", onPointerOver, true);
     document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("keydown", onKeyDown, true);
+    // Any real interaction unlocks the passive offers for this page. Scrolling deliberately does not: reading a page
+    // is browsing, not asking for a download.
+    for (const type of INTERACTION_TYPES) {
+      document.addEventListener(type, markInteracted, { capture: true, passive: true });
+    }
     document.addEventListener("scroll", () => { if (state.link) ensureTick(); sweepMedia(); }, true);
     document.addEventListener("fullscreenchange", onFullscreenChange, true);
     document.addEventListener("pointerdown", onOutsidePointer, true);
@@ -1708,6 +1751,7 @@
     document.removeEventListener("pointerover", onPointerOver, true);
     document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    for (const type of INTERACTION_TYPES) document.removeEventListener(type, markInteracted, true);
     document.removeEventListener("fullscreenchange", onFullscreenChange, true);
     document.removeEventListener("pointerdown", onOutsidePointer, true);
     globalThis.removeEventListener("resize", ensureTick);

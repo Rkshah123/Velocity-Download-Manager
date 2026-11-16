@@ -808,3 +808,25 @@ page shows no card and no pill, a file the page fetches is still offered once, r
 the record survives a browser restart (same profile, fresh process) so it is not offered again, no card appears after
 that restart, and the handshake is gone from the source. `artifacts/e2e/detect.js` still passes every check with the
 changed extension — hover buttons, network offer, click-to-send, stream strip, fullscreen, exclusions.
+
+## Round 19 — passive offers need a gesture, and a dismissal sticks
+
+Reported again on a second Chrome profile: offers came back on every browser start. Chrome's own `History` database
+for that profile showed why — the entries are *passive* detections (`video-downloads.googleusercontent.com/ADGPM…`
+attachment responses of 400–540 MB), not captured downloads (the newest `downloads` row predates the previous fix).
+The page a restored tab loads fetches those files by itself, every URL carries a fresh token, so neither a
+per-navigation dedupe nor a URL-shaped ledger could stop it.
+
+Two changes in `detector.js`:
+
+1. **A passive offer now requires an interaction on the page.** `pointerdown`, `mousedown`, `keydown` or
+   `touchstart` unlocks offers for that document; scrolling deliberately does not. A page that fetches a file while
+   it loads — a restored tab, a preview handler, a player preloading the next item — is no longer offered anything,
+   which is exactly the "popups when Chrome starts" case.
+2. **Dismissing an offer is remembered in `storage.local`** (`dismissedOffers`, 500 newest), not in the page. Closing
+   a pill now really ends it: a reload, a fresh page or a browser restart does not bring that file back.
+
+Verified: `artifacts/e2e/popup-regression.js` (13 checks) — no card or pill on load and reload, a file fetched before
+any interaction is not offered, scrolling does not unlock offers, a click does unlock them, the offered file is
+remembered and is not offered again after a refresh or a browser restart. `artifacts/e2e/detect.js`: 99 checks, all
+passed (hover buttons, network offer after interaction, click-to-send, stream strip, fullscreen, exclusions).
