@@ -43,9 +43,13 @@ Installed app: `%LOCALAPPDATA%\Programs\Velocity\Velocity.App.exe`, extension co
   download interception/`takeOver`, per-profile ledger), `detector.js` (page-side sniffing,
   interaction gating, dismissal), `content.js` (in-page prompt), `capture-decision.js`
   (pure "offer or ignore" rule), `manifest.json`, `options.*`, `popup.*`.
-- Unpacked, no manifest `key`, so the extension ID derives from the folder path:
-  `loopmagklpfneecglcankfihcephdbld`, shared by every Chrome profile that loads this folder.
-- Native host manifest (only that ID is allowed):
+- The manifest carries a fixed public `key`, so the extension ID is `jnfpmdnbiomjnelmlaohkpifaacandjg`
+  on every machine, in every profile, from any folder. **Never remove the `key`**: without it Chrome derives the ID
+  from the load path and the extension is dropped (and its native-host permission lost) as soon as the folder moves.
+  The matching private key is `artifacts/keys/velocity-extension.pem` (gitignored, only needed to build a signed CRX).
+- Load the extension from a path that does not move: after installing, `%LOCALAPPDATA%\Programs\Velocity\browser-extension`.
+  Loading from this repo also works, but moving/renaming the repo then requires one *Reload* (same ID, same data).
+- Native host manifest (the shipped ID is always allowed; the app rewrites this file on every start):
   `%LOCALAPPDATA%\Velocity\native-host\com.velocity.download_manager.json` →
   `artifacts\browser-host\Velocity.BrowserHost.exe`.
 - State lives in `chrome.storage.local`: `downloadedFiles` (the ledger, 1000 entries,
@@ -58,6 +62,10 @@ Installed app: `%LOCALAPPDATA%\Programs\Velocity\Velocity.App.exe`, extension co
 2. Only offer when the user explicitly clicks a downloadable link or starts a download.
 3. A file already downloaded, offered or declined is never offered again; completed
    downloads must not be recaptured after restarting Chrome or Velocity.
+3b. A captured download is **paused, not cancelled**, while the offer is open. "Keep in Chrome" resumes that same
+   transfer (so signed, POST and one-time links always work); taking it in Velocity cancels it; an unanswered offer
+   cancels it when its lifetime ends. Only a download Chrome never turned into an item (a bare page click) is started
+   fresh for "Keep in Chrome".
 4. Chrome replays interrupted downloads from its own list at startup. Those must be
    cancelled silently: same item id as a cancelled capture, start time older than
    `RESTORED_MS` (2 min), or a known file with no tab behind it.

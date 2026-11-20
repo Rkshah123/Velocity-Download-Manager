@@ -19,6 +19,14 @@ internal static class StartupIntegration
     private const string RunValueName = "Velocity";
     private const string HostName = "com.velocity.download_manager";
 
+    /// <summary>
+    /// The extension's id comes from the public key carried in its manifest, so it is the same on every machine and
+    /// after any reinstall or folder change — unlike an unpacked extension's path-derived id, which is what made the
+    /// helper stop matching the moment the project folder moved. It is registered whether or not anything else is
+    /// known yet, so the first start of the app already authorises the extension.
+    /// </summary>
+    private const string ExtensionId = "jnfpmdnbiomjnelmlaohkpifaacandjg";
+
     private static readonly string DataDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Velocity");
 
@@ -67,13 +75,11 @@ internal static class StartupIntegration
             var hostPath = ResolveHostExecutable(existing);
             if (hostPath is null) return;   // never point a browser at an executable that is not there
 
+            // The shipped id is always authorised, so registration can never depend on a settings file that a fresh
+            // profile, a move or a reinstall has not written yet.
             var origins = ReadOrigins(existing);
-            if (origins.Count == 0)
-            {
-                var extensionId = ReadExtensionId();
-                if (!string.IsNullOrWhiteSpace(extensionId)) origins.Add($"chrome-extension://{extensionId.Trim()}/");
-            }
-            if (origins.Count == 0) return;   // no known extension yet: registration is done when it is known
+            AddOrigin(origins, ExtensionId);
+            AddOrigin(origins, ReadExtensionId());
 
             Directory.CreateDirectory(HostDirectory);
             var manifest = new JsonObject
@@ -111,6 +117,14 @@ internal static class StartupIntegration
         {
             // Registration is a convenience that can be repeated by the extension's own script if needed.
         }
+    }
+
+    private static void AddOrigin(List<string> origins, string? extensionId)
+    {
+        var id = extensionId?.Trim().Trim('/');
+        if (string.IsNullOrWhiteSpace(id) || !id.All(character => character is >= 'a' and <= 'p')) return;
+        var origin = $"chrome-extension://{id}/";
+        if (!origins.Contains(origin, StringComparer.OrdinalIgnoreCase)) origins.Add(origin);
     }
 
     private static JsonObject? ReadManifest()

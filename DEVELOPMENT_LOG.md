@@ -867,3 +867,47 @@ directly by `artifacts/e2e/capture-decision.js`:
 
 Verified: `artifacts/e2e/capture-decision.js` 8/8; `artifacts/e2e/declined-downloads.js` all checks passed;
 `artifacts/e2e/popup-regression.js` all checks passed; `artifacts/e2e/detect.js` all checks passed.
+
+## Round 22 — a fixed identity, an app that repairs itself, and a browser that waits
+
+The user moved the Velocity folder, and the extension disappeared from every Chrome profile; reloading it unpacked
+then produced *"The Velocity native host is not installed."* Three separate things in the same chain:
+
+1. The manifest had no `key`, so an unpacked extension's id was derived from the folder path. New folder → new id.
+2. Chrome still pointed at the old absolute path, so the extension was dropped from the profile.
+3. The native-host manifest authorised exactly one id — the old one — so the reloaded copy was forbidden from
+   messaging the host, while the message told the user to run a script that lives inside the folder they had moved.
+
+**Fixed identity.** `browser-extension/chromium/manifest.json` now carries a public `key`, so the id is
+`jnfpmdnbiomjnelmlaohkpifaacandjg` everywhere: any folder, any profile, any machine, any reinstall. The matching
+private key stays out of version control (`artifacts/keys/`, gitignored). Reloading from a moved folder now keeps the
+same id, the same `chrome.storage` and the same host permission.
+
+**Self-repairing registration.** `StartupIntegration` always authorises the shipped id — it no longer depends on
+`browser-settings.json` having an `extensionId`, which a fresh profile or a moved folder never wrote — and appends any
+id already granted, so an older install keeps working during the transition. `register-native-host.ps1` defaults to
+the same id and takes `-AdditionalExtensionIds`. The extension's error text no longer names a script: it says to open
+Velocity once, which is what actually repairs it.
+
+**Chrome waits for the decision.** A captured download is now *paused*, not cancelled, the moment it appears, and the
+offer is made while it waits. "Keep in Chrome" resumes that exact transfer, so a signed, POST or one-time-only link
+still delivers — the case a fresh `downloads.download` could not. Taking the file in Velocity cancels the paused copy;
+a failed hand-off resumes it instead of starting a second request; an unanswered offer cancels it when its lifetime
+ends. Only an offer Chrome never turned into a download (a bare page click) still starts a fresh request for
+"Keep in Chrome". Interception off or an excluded site is untouched: Chrome downloads normally.
+
+The agent moved into `holdBrowserDownload` / `releaseHeldDownload` in `background.js`; Firefox (no pause in its API)
+keeps the cancel path.
+
+Verified on this build with real Chrome:
+
+- `artifacts/e2e/declined-downloads.js` — all checks passed (the declined file stays `interrupted`, never in progress).
+- `artifacts/e2e/popup-regression.js` — all checks passed.
+- `artifacts/e2e/detect.js` — all checks passed (including "Chrome keeps no copy" after a pause is cancelled, and the
+  native-host hand-offs, which first failed only because the test copy's new id was not yet authorised).
+- `artifacts/e2e/capture-decision.js` — 8/8.
+- `dotnet build Velocity.slnx` — 0 warnings, 0 errors. Installer rebuilt, installed, app started; it rewrote the host
+  manifest by itself with the fixed id, and the installed extension carries the same `key` and hold logic.
+
+Loading instructions in `EXTENSION-NOTES.md` and `browser-extension/README.md` now point at the installed copy,
+`%LOCALAPPDATA%\Programs\Velocity\browser-extension`, whose path never changes.

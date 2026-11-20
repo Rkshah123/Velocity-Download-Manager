@@ -187,10 +187,13 @@ function sendNative(payload) {
 
 function nativeError(error) {
   const message = String(error?.message || error);
+  // Velocity registers its helper itself: every start of the desktop app re-points the browser at an executable that
+  // exists and at this extension's id. Asking the user to run a script was the wrong instruction — the script lives in
+  // whatever folder the project used to be in, and moving the folder is exactly when the old id stopped matching.
   if (/not found|forbidden|Access to the specified native messaging host/i.test(message))
-    return "The Velocity native host is not installed. Run browser-extension/register-native-host.ps1 once, then reload the extension.";
+    return "Velocity's browser helper is not registered for this extension yet. Open Velocity once — it registers itself — then reload the extension.";
   if (/exited|disconnected|pipe/i.test(message))
-    return "The Velocity helper stopped unexpectedly. Reinstall the native host with register-native-host.ps1.";
+    return "The Velocity helper stopped unexpectedly. Open Velocity again; if it keeps happening, reinstall Velocity.";
   return message;
 }
 
@@ -872,8 +875,75 @@ async function findDownload(id) {
   });
 }
 
-// "Keep in Chrome" and a failed hand-off both need a real browser download, so one is started on purpose. It is a
-// new request with its own entry, never a resumed download.
+// A captured download is held, not destroyed. Chrome's own copy is paused the instant it appears and waits there
+// while the offer is on screen, so the user's decision is made against the real request Chrome already made — same
+// URL, same cookies, same referer, same POST body, same one-time token. "Keep in Chrome" then resumes *that*
+// transfer, which is why it can never fail on a link that only works once. Taking the file in Velocity cancels the
+// paused copy, so the browser still keeps nothing.
+const heldDownloads = new Map();
+
+async function holdBrowserDownload(item) {
+  const url = item.finalUrl || item.url || "";
+  if (isFirefox) {
+    // Firefox's downloads API has no pause: its copy is cancelled as before.
+    await cancelBrowserDownload(item.id);
+    return;
+  }
+
+  let paused = false;
+  for (let attempt = 0; attempt < 15; attempt++) {
+    await downloadsCall("pause", item.id);
+    const current = await findDownload(item.id);
+    if (!current) break;
+    if (current.state === "paused") { paused = true; break; }
+    // Already finished or already gone: there is nothing to hold.
+    if (current.state === "interrupted" || current.state === "complete") break;
+    await new Promise(resolve => setTimeout(resolve, 40));
+  }
+
+  if (!paused) {
+    // This copy could not be held (the browser finished it first, or refused to pause). It is cancelled exactly as
+    // before, and "Keep in Chrome" then starts a fresh request.
+    await cancelBrowserDownload(item.id);
+    return;
+  }
+
+  const entry = { id: item.id, url, timer: null };
+  // An offer nobody answers must not leave Chrome paused forever. After the offer's own lifetime the copy is
+  // cancelled, exactly like an ignored prompt has always ended.
+  entry.timer = setTimeout(() => {
+    void releaseHeldDownload(url, "cancel").then(() => finishOffer({ url }, { drop: true }));
+  }, OFFER_TTL_MS);
+  const previous = heldDownloads.get(url);
+  if (previous) clearTimeout(previous.timer);
+  heldDownloads.set(url, entry);
+}
+
+// Ends a hold: "cancel" drops Chrome's paused copy (Velocity owns the file, or the user said no), "resume" lets
+// Chrome finish the transfer it already started (the user chose the browser).
+async function releaseHeldDownload(url, choice) {
+  const entry = heldDownloads.get(url);
+  if (!entry) return { held: false, resumed: false };
+  heldDownloads.delete(url);
+  clearTimeout(entry.timer);
+
+  if (choice !== "resume") {
+    await cancelBrowserDownload(entry.id);
+    return { held: true, resumed: false };
+  }
+
+  await downloadsCall("resume", entry.id);
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const current = await findDownload(entry.id);
+    if (!current) break;                                            // Chrome forgot it: a fresh request is needed
+    if (current.state === "in_progress" || current.state === "complete") return { held: true, resumed: true };
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return { held: true, resumed: false };
+}
+
+// Only used when there is nothing to resume: the offer came from a page click Chrome never turned into a download, or
+// Chrome dropped the paused item. It is a new request with its own entry, never a resumed download.
 function startBrowserDownload(url, name) {
   const options = { url, saveAs: false };
   if (name && /^[^\\/:*?"<>|]{1,180}$/.test(name)) options.filename = name;
@@ -885,8 +955,9 @@ async function handleAction(request) {
   const decision = ["start", "later", "browser", "cancel"].includes(request.action) ? request.action : "start";
 
   if (decision === "cancel") {
-    // The browser's copy was cancelled when the offer was made, so dismissing the offer simply ends the request.
-    // Chrome is never asked to start, resume or keep it.
+    // Dismissing the offer drops the paused browser copy, so the file is downloaded nowhere — the same outcome this
+    // prompt has always had.
+    await releaseHeldDownload(details.url, "cancel");
     await finishOffer(details, { drop: true });
     // The user said no to this file. Remembering that is what stops the browser's own retry of the same download from
     // asking again the next time it starts.
@@ -899,9 +970,15 @@ async function handleAction(request) {
   // The user chose the browser: one deliberate, brand new download in Chrome.
   if (decision === "browser") {
     await finishOffer(details, { drop: true });
-    const started = await startBrowserDownload(details.url, details.name);
-    if (started) await rememberDownload(details.url, "chrome");
-    return started ? { ok: true, browser: true } : { ok: false, error: "Chrome refused to start that download." };
+    // Chrome's own paused transfer is resumed, so the file arrives exactly as the browser would have saved it. Only an
+    // offer Chrome never turned into a download needs a fresh request.
+    let started = (await releaseHeldDownload(details.url, "resume")).resumed;
+    if (!started) started = await startBrowserDownload(details.url, details.name);
+    if (started) {
+      stats.browserKept++;
+      await rememberDownload(details.url, "chrome");
+    }
+    return started ? { ok: true, browser: true } : { ok: false, error: "Chrome could not keep that download." };
   }
 
   const host = await withTimeout(sendNative({
@@ -915,10 +992,10 @@ async function handleAction(request) {
   }), 8000, { ok: false, error: "The Velocity helper did not answer in time. Check that the native host is registered." });
 
   if (!host?.ok) {
-    // Velocity could not take it. Nothing is left in the browser, so the file is started there deliberately rather
-    // than silently lost; that is a fresh request, never a resumed download.
+    // Velocity could not take it. The paused browser copy is resumed, so the download is never silently lost.
     await finishOffer(details, { drop: true });
-    const restored = await startBrowserDownload(details.url, details.name);
+    let restored = (await releaseHeldDownload(details.url, "resume")).resumed;
+    if (!restored) restored = await startBrowserDownload(details.url, details.name);
     if (restored) await rememberDownload(details.url, "chrome");
     return {
       ok: false,
@@ -926,6 +1003,8 @@ async function handleAction(request) {
     };
   }
 
+  // Velocity owns the file now: Chrome's paused copy is dropped, so the browser saves nothing alongside it.
+  await releaseHeldDownload(details.url, "cancel");
   await finishOffer(details);
   hostCache = { at: 0, value: null };
   // Velocity owns the file now: it is a download in progress, and it must never be offered again as new.
@@ -967,10 +1046,15 @@ async function takeOver(item) {
   if (!optionCache.intercept || isExcluded(url, optionCache.excluded)) return;
 
   const duplicate = hasLiveOffer(url) || (recent.has(url) && Date.now() - recent.get(url) < DEDUPE_MS);
-  // Read before this item is cancelled: its own id must not count as evidence of a replay of itself.
+  // Read before this item is resolved: its own id must not count as evidence of a replay of itself.
   const previouslyCancelled = cancelledSnapshot();
-  await cancelBrowserDownload(item.id);
-  if (duplicate) return;
+  // Chrome's copy stops transferring immediately, but it is *held* (paused) rather than thrown away, so the decision
+  // the user makes is applied to the transfer that already exists.
+  await holdBrowserDownload(item);
+  if (duplicate) {
+    await releaseHeldDownload(url, "cancel");
+    return;
+  }
 
   // Chrome retries downloads from its own list when it starts, and this extension cancelled most of them because the
   // user either took the file or said no. Those are replays, not new requests: the same item id, an old start time or
@@ -981,6 +1065,7 @@ async function takeOver(item) {
   const decision = typeof decide === "function" ? decide(item, record, previouslyCancelled, Date.now()) : "offer";
   if (decision !== "offer") {
     stats.declinedRestored = (stats.declinedRestored || 0) + 1;
+    await releaseHeldDownload(url, "cancel");
     if (!record) await rememberDownload(url, "declined");
     holdOffer(url);
     return;

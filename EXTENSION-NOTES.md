@@ -1,49 +1,52 @@
 # Loading the Velocity extension into another Chrome profile
 
-The extension is **unpacked** (not from the Web Store), so each Chrome profile loads it once by hand.
-Chrome gives an unpacked extension an ID derived from **the folder it was loaded from** — load the *same folder*
-and you always get the *same ID*, which is what the native-messaging host is already registered for.
+The extension is **unpacked** (not from the Web Store), so each profile loads it once by hand.
 
-Already-registered ID: `loopmagklpfneecglcankfihcephdbld`
+Its ID is **fixed by the public key in `manifest.json`**, not by the folder it is loaded from:
+
+```
+jnfpmdnbiomjnelmlaohkpifaacandjg
+```
+
+That is the whole point of the `key` field. Before it was added, Chrome derived the ID from the load path, so moving
+or renaming the folder gave the extension a new ID — Chrome dropped the old entry, and the native-messaging host,
+which authorises one exact ID, stopped answering. Never remove `key` from the manifest.
+
+## Load it from a folder that does not move
+
+```
+%LOCALAPPDATA%\Programs\Velocity\browser-extension
+```
+
+The installer keeps that copy up to date. Loading it means moving, renaming or deleting the project folder cannot
+affect Chrome at all. (Loading `Velocity\browser-extension\chromium` from the project also works and gives the *same*
+ID now; moving the project then needs one **Reload** click and nothing else.)
 
 ## Steps (2 minutes)
 
 1. Open the profile you want (Chrome → profile avatar → switch, or run `chrome.exe --profile-directory="Profile 1"`).
 2. Go to `chrome://extensions`.
 3. Turn on **Developer mode** (top-right).
-4. Click **Load unpacked** and pick this folder:
-
-   ```
-   C:\Users\ShahrukhKhan\Desktop\Velocity\browser-extension\chromium
-   ```
-
-   (the installed copy, `%LOCALAPPDATA%\Programs\Velocity\browser-extension`, has the *same files* but a
-   *different folder path*, so it would get a different ID — see below.)
-5. The card must show **Velocity Download Manager 2.1.0** with ID `loopmagklpfneecglcankfihcephdbld`.
-6. Pin it: puzzle-piece icon → pin "Velocity Download Manager".
-7. Open its **Details → Extension options**, or click the toolbar icon, and set your download folder / detection
+4. If an old Velocity card is still there, remove it (it points at a folder that may no longer exist).
+5. Click **Load unpacked** and pick the installed folder above.
+6. The card must show **Velocity Download Manager 2.1.0** with ID `jnfpmdnbiomjnelmlaohkpifaacandjg`.
+7. Pin it: puzzle-piece icon → pin "Velocity Download Manager".
+8. Open its **Details → Extension options**, or click the toolbar icon, and set your download folder / detection
    switch once for that profile (settings are per profile).
 
 That is all — no registry work, no restart. Make sure the Velocity app is running (or it will be started
 automatically on your first download).
 
-## If you load a different copy (different ID)
+## Why it stopped working after the folder moved
 
-Chrome native messaging only talks to an extension whose full ID is listed in the host manifest. If step 5 shows a
-different ID, add it to:
+1. An unpacked extension's ID used to come from its folder path. New path → new ID.
+2. At the same moment Chrome lost the folder it had been pointed at, so it removed the extension from the profile.
+3. The native host manifest authorised only the old ID, so even a successfully reloaded copy got
+   *"The Velocity native host is not installed"*.
 
-```
-%LOCALAPPDATA%\Velocity\native-host\com.velocity.download_manager.json
-```
-
-```json
-"allowed_origins": [
-  "chrome-extension://loopmagklpfneecglcankfihcephdbld/",
-  "chrome-extension://<the-new-id>/"
-]
-```
-
-Save the file, then in `chrome://extensions` press ↻ (Reload) on the Velocity card. Nothing else changes.
+All three are gone: the ID no longer depends on the path, the app rewrites the host manifest on every start and always
+authorises `jnfpmdnbiomjnelmlaohkpifaacandjg`, and it registers the host for Chrome, Edge, Brave, Vivaldi and
+Chromium. Reloading from any folder now keeps the same ID, the same settings and the same permission.
 
 ## Reloading after an update
 

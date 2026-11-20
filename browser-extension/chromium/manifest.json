@@ -4,6 +4,7 @@
   "version": "2.1.0",
   "description": "Automatic file detection and verified download capture for Velocity: offers files before they download and keeps your browser's own downloads working.",
   "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwgOB58EeEcHVRevD4ODXKrmxfRP2WZqyXG8TROpTEtA5fGaNJoRJryMUvz+uwASpsFQNi6L9T5/gL8HKmNTw++6HroPiHBt0Z1ZpXD/RTQjR0PkRK9Wvn3HSDr+Oco5yL1x0oDtpHdxukmERR8Kreb5yCesBTPzuvKXI/5VewYFLei+BHBA3f9KQr70cU2WcCnT/d1QJL697PVpLth87EBXpLYnLqpIi/OpHtcSkDGq8Y1rdgHsmSXYRUifqz4zV+rcQh4M6itiiGDbTpQ4QZdXuvu7tOAmPIKA+hadFODIy1jqsQlcv0NVLcq9/mPqRioqzV/VbcpBsnyNMvORpmQIDAQAB",
   "permissions": ["downloads", "contextMenus", "nativeMessaging", "storage", "webRequest"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "icons": {
