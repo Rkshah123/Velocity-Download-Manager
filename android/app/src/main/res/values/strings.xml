@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Velocity</string>
+    <string name="tagline">Android download manager</string>
+    <string name="link_hint">Paste a download link (http, https)</string>
+    <string name="download">Download</string>
+    <string name="save_to">Save to</string>
+    <string name="change">Change</string>
+    <string name="downloads">Downloads</string>
+    <string name="empty">No downloads yet.\nPaste a link above and tap Download.</string>
+    <string name="analyzing">Analyzing the link…</string>
+    <string name="default_folder">Downloads (default)</string>
+    <string name="channel_downloads">Downloads</string>
+    <string name="channel_complete">Completed downloads</string>
+
+    <!-- Settings -->
+    <string name="settings">Settings</string>
+    <string name="choose_theme">Choose theme</string>
+    <string name="download_settings">Download Settings</string>
+    <string name="download_settings_title">Downloads settings</string>
+    <string name="traffic_limits">Traffic Limits</string>
+    <string name="traffic_limits_title">Traffic limits</string>
+    <string name="about">About</string>
+    <string name="quit">Quit</string>
+    <string name="quit_question">Do you want to exit from Velocity?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="open_settings">Open settings</string>
+    <string name="back">Back</string>
+
+    <!-- Download settings -->
+    <string name="start_without_confirmation">Start downloading without confirmation</string>
+    <string name="remove_deleted">Automatically remove deleted files from download list</string>
+    <string name="remove_completed">Automatically remove completed downloads from download list</string>
+    <string name="skip_web_pages">Do not download web pages</string>
+    <string name="server_time">Use server time for file creation</string>
+    <string name="default_download_folder">Default download folder</string>
+    <string name="auto_folder">Choose default download folder automatically</string>
+    <string name="suggest_by_type">Suggest folders based on file type</string>
+    <string name="suggest_by_url">Suggest folders based on download URL</string>
+    <string name="fixed_folder">Fixed default download folder</string>
+    <string name="no_folder_chosen">No folder chosen</string>
+    <string name="pick_folder">Choose folder</string>
+    <string name="fixed_folder_hint">New downloads are saved here</string>
+    <string name="auto_folder_hint">Automatic</string>
+
+    <!-- Traffic limits -->
+    <string name="download_speed">Download speed</string>
+    <string name="max_simultaneous">Maximum number of simultaneous downloads</string>
+    <string name="speed_unlimited">Unlimited</string>
+    <string name="speed_applies">The limit applies to all transfers together. Drag the slider fully left for no limit.</string>
+    <string name="max_simultaneous_note">Downloads over this number wait in the queue until a slot is free.</string>
+    <string name="decrease">Decrease</string>
+    <string name="increase">Increase</string>
+
+    <!-- About -->
+    <string name="about_application">Application</string>
+    <string name="about_version">Version</string>
+    <string name="about_developer">Developer</string>
+    <string name="developer_name">Shahrukh Rais Khan</string>
+    <string name="about_tagline">Fast, resumable Android download manager</string>
+
+    <!-- Confirmation -->
+    <string name="confirm_title">Add download</string>
+    <string name="confirm_start">Start</string>
+    <string name="confirm_cancel">Cancel</string>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The two Velocity themes (Dark Jet Black, Beige) only differ in the values behind these attributes. -->
+    <attr name="vBg" format="color" />
+    <attr name="vSurface" format="color" />
+    <attr name="vSurfaceAlt" format="color" />
+    <attr name="vStroke" format="color" />
+    <attr name="vDivider" format="color" />
+    <attr name="vText" format="color" />
+    <attr name="vMuted" format="color" />
+    <attr name="vAccent" format="color" />
+    <attr name="vOnAccent" format="color" />
+    <attr name="vHeader" format="color" />
+    <attr name="vOnHeader" format="color" />
+    <attr name="vSuccess" format="color" />
+    <attr name="vWarning" format="color" />
+    <attr name="vDanger" format="color" />
+    <attr name="vTrackOff" format="color" />
+    <attr name="vThumbOff" format="color" />
+    <attr name="vThumbOn" format="color" />
+</resources>

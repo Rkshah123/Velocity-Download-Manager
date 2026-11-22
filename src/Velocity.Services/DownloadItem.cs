@@ -8,8 +8,8 @@ public sealed class DownloadItem : INotifyPropertyChanged
 {
     private static readonly string[] StatusDependents =
     [
-        nameof(StatusText), nameof(CanPause), nameof(CanResume), nameof(CanRetry), nameof(CanLimit),
-        nameof(ShowStatusAction), nameof(CanOpenFile), nameof(CanOpenFolder),
+        nameof(StatusText), nameof(CanPause), nameof(CanResume), nameof(CanRetry), nameof(CanDownloadAgain),
+        nameof(CanLimit), nameof(ShowStatusAction), nameof(CanOpenFile), nameof(CanOpenFolder),
         nameof(TimeRemaining), nameof(Details), nameof(IsBusy)
     ];
 
@@ -148,6 +148,34 @@ public sealed class DownloadItem : INotifyPropertyChanged
 
     public string? Error { get => _error; internal set => Set(ref _error, value); }
 
+    private bool _linkExpired;
+
+    /// <summary>
+    /// True when a resume was refused because the link is broken or expired. The partial file is still on disk; the
+    /// only action that may replace it is "Download again", which reuses this download's original link.
+    /// </summary>
+    public bool LinkExpired
+    {
+        get => _linkExpired;
+        internal set
+        {
+            if (!Set(ref _linkExpired, value)) return;
+            OnPropertyChanged(nameof(CanDownloadAgain));
+            OnPropertyChanged(nameof(CanRetry));
+            OnPropertyChanged(nameof(ShowStatusAction));
+            OnPropertyChanged(nameof(StatusText));
+        }
+    }
+
+    private IReadOnlyList<long>? _connectionBytes;
+
+    /// <summary>Bytes each connection has written, so a download window can list every connection.</summary>
+    public IReadOnlyList<long>? ConnectionBytes
+    {
+        get => _connectionBytes;
+        internal set => Set(ref _connectionBytes, value);
+    }
+
     public double Progress => TotalBytes is > 0 ? Math.Clamp((double)DownloadedBytes / TotalBytes.Value * 100, 0, 100) : 0;
     public string PercentText => TotalBytes is > 0 ? $"{Progress:0}%" : "—";
     public string DownloadedSize => ByteSize.Format(DownloadedBytes);
@@ -178,7 +206,7 @@ public sealed class DownloadItem : INotifyPropertyChanged
         DownloadStatus.Paused => "Paused",
         DownloadStatus.Resuming => "Resuming",
         DownloadStatus.Completed => "Completed",
-        DownloadStatus.Failed => "Failed",
+        DownloadStatus.Failed => _linkExpired ? "Link expired" : "Failed",
         _ => "Cancelled"
     };
 
@@ -214,11 +242,14 @@ public sealed class DownloadItem : INotifyPropertyChanged
 
     public bool CanPause => Status is DownloadStatus.Downloading or DownloadStatus.Queued or DownloadStatus.Resuming;
     public bool CanResume => Status is DownloadStatus.Paused or DownloadStatus.Cancelled;
-    public bool CanRetry => Status == DownloadStatus.Failed;
+    public bool CanRetry => Status == DownloadStatus.Failed && !LinkExpired;
+
+    /// <summary>A broken link is not retried: the file is offered again, from the link it was downloaded from.</summary>
+    public bool CanDownloadAgain => Status == DownloadStatus.Failed && LinkExpired;
 
     /// <summary>A ceiling only means something for a transfer that can still run.</summary>
     public bool CanLimit => Status is DownloadStatus.Downloading or DownloadStatus.Queued or DownloadStatus.Resuming or DownloadStatus.Paused;
-    public bool ShowStatusAction => CanPause || CanResume || CanRetry;
+    public bool ShowStatusAction => CanPause || CanResume || CanRetry || CanDownloadAgain;
     public bool CanOpenFile => Status == DownloadStatus.Completed;
     public bool CanOpenFolder => Status is DownloadStatus.Completed or DownloadStatus.Paused or DownloadStatus.Failed or DownloadStatus.Cancelled;
 

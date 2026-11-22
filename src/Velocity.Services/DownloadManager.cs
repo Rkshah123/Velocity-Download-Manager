@@ -15,15 +15,55 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
     // owner per path they write the same .part, the second one dies on the share violation, and the survivor is a
     // mix of both transfers. That is what made several simultaneous downloads look like they "fail".
     private readonly Dictionary<string, long> _destinationOwners = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<DownloadItem> _items = [];
     private int _active;
 
     /// <summary>Raised for every download added to the manager, including scheduled and browser captures.</summary>
     public event EventHandler<DownloadItem>? ItemRegistered;
 
+    /// <summary>
+    /// Every download registered in this session, in the order they were added. The library window can be closed
+    /// and opened again while transfers still run, so the rows it shows are owned here instead of by that window.
+    /// </summary>
+    public IReadOnlyList<DownloadItem> Items
+    {
+        get { lock (_gate) return _items.ToArray(); }
+    }
+
+    /// <summary>True while a transfer runs or waits for a slot, so the process still has work to finish.</summary>
+    public bool HasActiveTransfers
+    {
+        get { lock (_gate) return _active > 0 || _queue.Count > 0; }
+    }
+
+    /// <summary>
+    /// True while any download is still unfinished — running, queued, paused or failed. Velocity keeps itself in the
+    /// notification area while this holds, so a paused transfer is never lost by closing the library window.
+    /// </summary>
+    public bool HasUnfinishedDownloads
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_active > 0 || _queue.Count > 0) return true;
+                return _items.Any(item => item.Status is DownloadStatus.Paused or DownloadStatus.Queued
+                    or DownloadStatus.Resuming or DownloadStatus.Downloading or DownloadStatus.Failed);
+            }
+        }
+    }
+
     public async Task<IReadOnlyList<DownloadRecord>> LoadHistoryAsync(CancellationToken cancellationToken = default) => await repository.GetRecentAsync(cancellationToken);
 
     public DownloadItem CreateHistoryItem(DownloadRecord record)
     {
+        // A library window that is closed and opened again must not create a second copy of a download that is
+        // still alive in this session; the manager already owns that row.
+        lock (_gate)
+        {
+            if (_items.FirstOrDefault(existing => existing.Id == record.Id) is { } live) return live;
+        }
+
         // The stored file name and connection count are part of the resume contract: the engine must look for
         // exactly the same .part file the previous session was writing.
         var directory = Path.GetDirectoryName(record.DestinationPath) ?? string.Empty;
@@ -48,6 +88,10 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
 
         // The database is only a summary; the partial file is the truth about how many bytes survived a restart.
         SyncBytesFromPartial(item);
+
+        // Registered like any other row so the application knows about a paused transfer even before (or without)
+        // its library window, and so a browser capture of the same link is not added twice.
+        lock (_gate) _items.Add(item);
 
         return item;
     }
@@ -109,6 +153,8 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
                 Headers: request.Headers),
             cancellationToken);
 
+        lock (_gate) _items.Add(item);
+
         if (startImmediately)
         {
             lock (_gate) _queue.Add(item);
@@ -147,10 +193,55 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
 
     public void Resume(DownloadItem item)
     {
+        // A download whose link no longer serves its bytes is only resumed the way the user asked for: from the
+        // original link, starting again, with the old partial file replaced.
+        if (item.LinkExpired)
+        {
+            DownloadAgain(item);
+            return;
+        }
+
         if (item.Status is not (DownloadStatus.Paused or DownloadStatus.Failed or DownloadStatus.Cancelled)) return;
         item.PauseRequested = false;
         item.Error = null;
         item.Attempts = 0;
+        item.Status = DownloadStatus.Resuming;
+        lock (_gate)
+        {
+            if (!_queue.Contains(item)) _queue.Add(item);
+        }
+        ProcessQueue();
+    }
+
+    /// <summary>
+    /// Starts the file over after a resume was refused, because the link is broken or expired and the bytes on disk
+    /// no longer match it. This is the only place a partial file is discarded: the user asked for the download again,
+    /// and everything else about the download — its original link, headers, name and folder — is reused unchanged.
+    /// </summary>
+    public void DownloadAgain(DownloadItem item)
+    {
+        if (item.Status is DownloadStatus.Downloading or DownloadStatus.Queued or DownloadStatus.Resuming) return;
+
+        foreach (var path in new[] { item.DestinationPath + ".part", item.DestinationPath + ".part.meta", item.DestinationPath + ".part.meta.prev", item.DestinationPath + ".part.meta.tmp" })
+        {
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A locked file simply fails the transfer again with its real reason.
+            }
+        }
+
+        item.LinkExpired = false;
+        item.Error = null;
+        item.Notice = null;
+        item.Attempts = 0;
+        item.PauseRequested = false;
+        item.DownloadedBytes = 0;
+        item.TotalBytes = null;
+        item.ConnectionBytes = null;
         item.Status = DownloadStatus.Resuming;
         lock (_gate)
         {
@@ -435,6 +526,8 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
         item.CancellationSource = cts;
         item.Status = DownloadStatus.Downloading;
         item.Error = null;
+        // A new attempt may use a different number of connections (a retry halves them), so old rows must go.
+        item.ConnectionBytes = null;
         try
         {
             var lastPersist = DateTime.MinValue;
@@ -464,6 +557,7 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
                 item.DownloadedBytes = value.DownloadedBytes;
                 item.TotalBytes = value.TotalBytes;
                 item.BytesPerSecond = value.BytesPerSecond;
+                item.ConnectionBytes = value.ConnectionBytes;
                 if ((DateTime.UtcNow - lastPersist).TotalSeconds < 3) return;
                 lastPersist = DateTime.UtcNow;
                 _ = PersistAsync(item);
@@ -495,6 +589,19 @@ public sealed class DownloadManager(IDownloadEngine engine, DownloadRepository r
             item.Attempts = 0;
             item.Status = DownloadStatus.Completed;
             await PersistAsync(item);
+        }
+        catch (DownloadLinkExpiredException expired)
+        {
+            // The link cannot continue this transfer. The partial file and its checkpoint are deliberately left on
+            // disk: the message asks the user to download the file again, and only that choice may replace them.
+            // Everything the message needs is set before the status changes: the library reacts to the status on the
+            // UI thread straight away, so it must already be able to read the reason and the kept-bytes notice.
+            item.LinkExpired = true;
+            item.Error = DownloadLinkExpiredException.DefaultMessage;
+            item.Notice = expired.Detail;
+            SyncBytesFromPartial(item);
+            item.Status = DownloadStatus.Failed;
+            if (!IsDeleted(item)) await PersistAsync(item);
         }
         catch (OperationCanceledException)
         {

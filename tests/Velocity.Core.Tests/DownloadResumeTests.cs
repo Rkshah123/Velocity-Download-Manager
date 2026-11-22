@@ -85,18 +85,22 @@ public sealed class DownloadResumeTests
     }
 
     [Fact]
-    public async Task RestartsSafelyWhenTheServerIgnoresRanges()
+    public async Task RefusesToRestartWhenTheServerIgnoresRanges()
     {
         var payload = Payload(1024 * 1024);
         using var server = new RangeTestServer(payload) { HonorRanges = false };
         using var folder = new TemporaryFolder();
-        await File.WriteAllBytesAsync(Path.Combine(folder.Path, "file.bin.part"), Payload(200_000));
+        var part = Path.Combine(folder.Path, "file.bin.part");
+        await File.WriteAllBytesAsync(part, Payload(200_000));
 
         var engine = new HttpDownloadEngine(new HttpClient());
-        var result = await engine.DownloadAsync(new DownloadRequest($"{server.BaseUrl}/file.bin", folder.Path, Connections: 1));
+        var error = await Assert.ThrowsAsync<DownloadLinkExpiredException>(() =>
+            engine.DownloadAsync(new DownloadRequest($"{server.BaseUrl}/file.bin", folder.Path, Connections: 1)));
 
-        Assert.Equal(payload, await File.ReadAllBytesAsync(result.FilePath));
-        Assert.False(result.ResumeSupported);
+        Assert.Equal(DownloadLinkExpiredException.DefaultMessage, error.Message);
+        Assert.True(File.Exists(part), "a refused resume must keep the partial file");
+        Assert.Equal(200_000, new FileInfo(part).Length);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "file.bin")), "nothing may be downloaded behind the user's back");
     }
 
     [Fact]
@@ -147,29 +151,36 @@ public sealed class DownloadResumeTests
         var progress = new InlineProgress(value => { if (value.DownloadedBytes > original.Length / 3) pause.Cancel(); });
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => engine.DownloadAsync(request, progress, pause.Token));
 
+        var part = Path.Combine(folder.Path, "changed.bin.part");
+        var kept = new FileInfo(part).Length;
         server.ReplacePayload(replacement);
-        var result = await engine.DownloadAsync(request);
 
-        Assert.Contains(server.Requests, request => request.IfRange is not null);
-        Assert.Equal(replacement, await File.ReadAllBytesAsync(result.FilePath));
-        Assert.False(File.Exists(Path.Combine(folder.Path, "changed.bin.part")));
+        var error = await Assert.ThrowsAsync<DownloadLinkExpiredException>(() => engine.DownloadAsync(request));
+
+        Assert.Contains(server.Requests, sent => sent.IfRange is not null);
+        Assert.Equal(DownloadLinkExpiredException.DefaultMessage, error.Message);
+        Assert.Equal(kept, new FileInfo(part).Length);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "changed.bin")));
     }
 
     [Fact]
-    public async Task RestartsWhenTheServerRejectsAnUntrustedRange()
+    public async Task RefusesToRestartWhenTheServerRejectsTheStoredRange()
     {
         var payload = Payload(1024 * 1024);
         using var server = new RangeTestServer(payload) { RejectRanges = true };
         using var folder = new TemporaryFolder();
-        await File.WriteAllBytesAsync(Path.Combine(folder.Path, "stale.bin.part"), Payload(5000));
+        var part = Path.Combine(folder.Path, "stale.bin.part");
+        await File.WriteAllBytesAsync(part, Payload(5000));
 
         var engine = new HttpDownloadEngine(new HttpClient());
-        var result = await engine.DownloadAsync(new DownloadRequest($"{server.BaseUrl}/stale.bin", folder.Path, Connections: 1));
+        await Assert.ThrowsAsync<DownloadLinkExpiredException>(() =>
+            engine.DownloadAsync(new DownloadRequest($"{server.BaseUrl}/stale.bin", folder.Path, Connections: 1)));
 
-        Assert.Equal(payload, await File.ReadAllBytesAsync(result.FilePath));
-        Assert.True(server.Requests.Count >= 2, "the engine must retry from zero after a 416");
+        // Exactly one request, still ranged: the 416 is reported, never followed by a fresh transfer from zero.
+        Assert.Single(server.Requests);
         Assert.Equal("bytes=5000-", server.Requests[0].Range);
-        Assert.Null(server.Requests[^1].Range);
+        Assert.Equal(5000, new FileInfo(part).Length);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "stale.bin")));
     }
 
     [Fact]

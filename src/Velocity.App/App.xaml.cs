@@ -33,6 +33,18 @@ public partial class App : System.Windows.Application
     private WinIcon? _baseTrayIcon;
     private readonly Dictionary<int, WinIcon> _progressIcons = [];
     private int _trayIconPercent = -1;
+    private DownloadManager? _downloadManager;
+    private SettingsService? _settings;
+    private DownloadCoordinator? _coordinator;
+    private bool _mainWindowClosed;
+    private bool _exiting;
+
+    public App()
+    {
+        // The library window and a download's window are independent: closing one must never shut down the
+        // application while the other is open or a transfer is still running. The exit decision is made below.
+        ShutdownMode = ShutdownMode.OnExplicitShutdown;
+    }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -76,12 +88,90 @@ public partial class App : System.Windows.Application
         StartupIntegration.EnsureNativeHost();
         StartupIntegration.ApplyStartWithWindows(settings.Current.StartWithWindows);
 
-        MainWindow = new MainWindow(
-            _services.GetRequiredService<DownloadManager>(),
-            settings,
-            _services.GetRequiredService<SchedulerService>());
+        _settings = settings;
+        _downloadManager = _services.GetRequiredService<DownloadManager>();
+        // The capture listener and every download window belong to the application, not to the library window:
+        // a transfer that is still running when the library is closed keeps its window and keeps going.
+        _coordinator = new DownloadCoordinator(_downloadManager, settings);
+        _coordinator.Start();
+
+        MainWindow = CreateMainWindow();
+        // A capture handed over by the browser is why Velocity was started. The transfer's window is what the user
+        // asked for, so the library opens minimized in the background instead of covering the page they are on;
+        // its taskbar button or the tray icon brings it forward only when they ask for it.
+        if (DownloadCoordinator.HasPendingCapture())
+        {
+            MainWindow.ShowActivated = false;
+            MainWindow.WindowState = WindowState.Minimized;
+        }
         MainWindow.Show();
         InitializeTrayIcon();
+        // A fresh hand-off is processed at once instead of waiting for the first two-second tick.
+        await _coordinator.ProcessInboxAsync();
+    }
+
+    private MainWindow CreateMainWindow()
+    {
+        var window = new MainWindow(
+            _downloadManager!,
+            _settings!,
+            _services!.GetRequiredService<SchedulerService>(),
+            _coordinator!);
+
+        window.Closed += (_, _) =>
+        {
+            _mainWindowClosed = true;
+            NotifyWindowClosed(window);
+        };
+
+        return window;
+    }
+
+    /// <summary>
+    /// Decides what a closing window means for the process. A window that is still open, or a transfer that is
+    /// still running, keeps Velocity alive; only the last window of an idle application ends it. A download that
+    /// is running when the library is closed therefore continues in the background until it finishes.
+    /// </summary>
+    internal void NotifyWindowClosed(Window closing)
+    {
+        if (Windows.OfType<Window>().Any(window => !ReferenceEquals(window, closing) && window.IsVisible)) return;
+
+        // A running transfer, or one that is paused and waiting for the user, keeps Velocity alive in the
+        // notification area. Only "Force quit" from the tray menu ends the process.
+        if (_downloadManager?.HasUnfinishedDownloads == true)
+        {
+            ShowNotification("Velocity is still running", "Your downloads are kept in the notification area. Click the tray icon to open Velocity again.");
+            return;
+        }
+
+        Shutdown();
+    }
+
+    /// <summary>
+    /// True while the process must not exit — either the tray menu's force quit was chosen, or a window is closing
+    /// while downloads are still unfinished.
+    /// </summary>
+    internal bool IsExiting => _exiting;
+
+    /// <summary>
+    /// The library window's X button must never throw away unfinished work. While any download is running, queued,
+    /// paused or failed the window is hidden into the notification area instead of closing, and the tray icon brings
+    /// it back with its rows exactly as they were.
+    /// </summary>
+    internal bool HideMainWindowInsteadOfClosing(Window window)
+    {
+        if (_exiting || !ReferenceEquals(window, MainWindow)) return false;
+        if (_downloadManager?.HasUnfinishedDownloads != true) return false;
+
+        ShowNotification("Velocity is still running", "Your downloads stay in the notification area. Click the tray icon to open Velocity again.");
+        return true;
+    }
+
+    /// <summary>Ends the process even with transfers running, exactly like the tray menu's force quit.</summary>
+    internal void ForceQuit()
+    {
+        _exiting = true;
+        Shutdown();
     }
 
     private static void ClearInputFocusOnBackgroundClick(object sender, MouseButtonEventArgs e)
@@ -109,6 +199,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _coordinator?.Stop();
         _services?.Dispose();
         _taskbar?.DestroyHandle();
         _trayIcon?.Dispose();
@@ -122,8 +213,9 @@ public partial class App : System.Windows.Application
         _baseTrayIcon = LoadTrayIcon();
         _trayIcon = new NotifyIcon { Icon = _baseTrayIcon, Text = "Velocity", Visible = true };
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Open Velocity", null, (_, _) => ShowMainWindow());
-        menu.Items.Add("Exit", null, (_, _) => Shutdown());
+        menu.Items.Add("Open Velocity", null, (_, _) => ShowMainWindow())!.Font = new System.Drawing.Font("Segoe UI", 9f, System.Drawing.FontStyle.Bold);
+        menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+        menu.Items.Add("Force quit Velocity", null, (_, _) => ForceQuit());
         _trayIcon.ContextMenuStrip = menu;
         // One click is enough, exactly like IDM: the window comes back on the first left click instead of
         // waiting for a double click. A second click of a double click simply re-activates the same window.
@@ -221,7 +313,18 @@ public partial class App : System.Windows.Application
 
     private void ShowMainWindow()
     {
-        if (MainWindow is null) return;
+        // Closing the library window during a download leaves the application running, and the tray icon must be
+        // able to bring it back: a closed Window cannot be shown again, so it is created anew and fills itself
+        // from the downloads the manager still owns.
+        if (_mainWindowClosed || MainWindow is null)
+        {
+            _mainWindowClosed = false;
+            MainWindow = CreateMainWindow();
+            MainWindow.Show();
+            MainWindow.Activate();
+            return;
+        }
+
         MainWindow.Show();
         if (MainWindow.WindowState == WindowState.Minimized) MainWindow.WindowState = WindowState.Normal;
         MainWindow.Activate();

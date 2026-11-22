@@ -5,16 +5,17 @@ using Velocity.DownloadEngine;
 namespace Velocity.Core.Tests;
 
 /// <summary>
-/// The promise of a pause is that resuming continues from the byte on disk. These are the server behaviours that
-/// hid a restart from zero: a host that ignores ranges, one that sends only a weak ETag (so <c>If-Range</c> is
-/// ignored and the whole file is sent), and one that refuses the resume probe while still honouring real ranges.
+/// The promise of a pause is that resuming continues from the byte on disk, and that a host which cannot continue
+/// from it is refused instead of starting the file over. These are the server behaviours that hid a restart from
+/// zero: a host that ignores ranges, one that sends only a weak ETag (so <c>If-Range</c> is ignored and the whole
+/// file is sent), and one that refuses the resume probe while still honouring real ranges.
 /// </summary>
 public sealed class ResumeRobustnessTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(90);
 
     [Fact]
-    public async Task PausingADownloadKeepsItWhenTheServerIgnoresRanges()
+    public async Task AResumeIsRefusedWhenTheServerIgnoresRanges()
     {
         var payload = Payload(6 * 1024 * 1024, 51);
         using var server = new RangeTestServer(payload, chunkDelayMs: 10) { HonorRanges = false };
@@ -25,19 +26,13 @@ public sealed class ResumeRobustnessTests
         var paused = await PauseAsync(engine, request, payload.Length / 3, folder.Path);
         Assert.True(paused > 0);
 
-        var reports = new List<long>();
-        var result = await engine.DownloadAsync(request, new InlineProgress(value =>
-        {
-            lock (reports) reports.Add(value.DownloadedBytes);
-        }));
+        // The host only offers the whole file, so it cannot continue this download. The saved bytes stay on disk
+        // until the user asks for the file again; nothing is silently restarted or truncated.
+        await Assert.ThrowsAsync<DownloadLinkExpiredException>(() => engine.DownloadAsync(request));
 
-        Assert.Equal(payload, await File.ReadAllBytesAsync(result.FilePath));
-        lock (reports)
-        {
-            Assert.NotEmpty(reports);
-            Assert.All(reports, bytes => Assert.True(bytes >= paused,
-                $"the resumed transfer reported {bytes} bytes after pausing at {paused}: it started over"));
-        }
+        var partial = Path.Combine(folder.Path, "no-ranges.bin.part");
+        Assert.Equal(paused, new FileInfo(partial).Length);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "no-ranges.bin")));
     }
 
     [Fact]

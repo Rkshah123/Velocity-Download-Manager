@@ -13,15 +13,17 @@ namespace Velocity.DownloadEngine;
 ///
 /// Bytes are always written to <c>&lt;file&gt;.part</c> and described by <c>&lt;file&gt;.part.meta</c>, so a pause,
 /// a crash or an application restart continues from the last byte the disk actually received:
-///  * <c>206 Partial Content</c> — validated against the requested offset, then appended.
-///  * <c>200 OK</c> — the server ignored the range (or the file changed); the partial file is truncated and
-///    restarted from zero rather than mixing bytes from two different versions.
-///  * <c>416 Range Not Satisfiable</c> — the partial is complete when its length matches the remote total,
-///    otherwise it is discarded and restarted safely.
+///  * <c>206 Partial Content</c> — validated against the requested offset, then appended. This single request is
+///    also the validation that the link still works and that the server can continue from the saved byte, so a
+///    resume costs no extra round trip.
+///  * <c>200 OK</c>, an unexpected <c>206</c>, <c>416</c>, or an expired/forbidden/missing link — the resume cannot
+///    continue. <see cref="DownloadLinkExpiredException"/> is raised and the partial file is kept untouched:
+///    restarting or truncating it here would silently throw away what the user already downloaded.
 ///  * <c>ETag</c> / <c>Last-Modified</c> are sent back as <c>If-Range</c>.
 ///
 /// Segmented downloads keep a per-segment byte count in the same sidecar, so pausing a multi-connection
-/// transfer no longer throws the partial file away.
+/// transfer no longer throws the partial file away. A segmented resume starts its range requests immediately from
+/// the checkpoint instead of probing the server first.
 /// </summary>
 public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
 {
@@ -88,7 +90,6 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
         var partial = destination + ".part";
         var metaPath = partial + ".meta";
         var offset = File.Exists(partial) ? new FileInfo(partial).Length : 0;
-        var restarted = false;
 
         while (true)
         {
@@ -145,57 +146,46 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
                         return new DownloadResult(destination, completeLength, remoteTotal, finalUrl, etag, lastModified, true);
                     }
 
-                    // The stored bytes do not belong to this resource: restart rather than append.
-                    TryDelete(partial);
-                    TryDeleteCheckpoint(metaPath);
-                    offset = 0;
-                    if (restarted) throw new IOException("The server rejected the resume request (HTTP 416) twice. Start the download again.");
-                    restarted = true;
-                    continue;
+                    // The bytes on disk are not what this link serves any more. Deleting the partial here is what
+                    // used to restart a download behind the user's back; it stays on disk until they ask again.
+                    throw new DownloadLinkExpiredException("The server rejected the resume request (HTTP 416), so the file it has no longer matches the saved bytes.");
                 }
 
-                if (!response.IsSuccessStatusCode) throw new HttpRequestException($"The server returned {(int)response.StatusCode} ({response.StatusCode}).", null, response.StatusCode);
+                if (!response.IsSuccessStatusCode)
+                {
+                    // A link that now answers 401/403/404/410 is expired, signed out or gone. A 5xx or a timeout is
+                    // a server problem, which keeps the normal retry path and its short backoff.
+                    if (offset > 0 && IsLinkGone(response.StatusCode))
+                        throw new DownloadLinkExpiredException($"The server answered HTTP {(int)response.StatusCode} ({response.StatusCode}) for the saved link.");
+
+                    throw new HttpRequestException($"The server returned {(int)response.StatusCode} ({response.StatusCode}).", null, response.StatusCode);
+                }
 
                 var contentRange = response.Content.Headers.ContentRange;
                 if (response.StatusCode == HttpStatusCode.PartialContent && (contentRange is null || contentRange.From != offset))
                 {
-                    // A partial response we cannot place at the exact requested offset would produce a hole or a
-                    // duplicate range, so the stored bytes are discarded and the transfer starts again cleanly.
-                    TryDelete(partial);
-                    TryDeleteCheckpoint(metaPath);
-                    offset = 0;
-                    if (restarted) throw new IOException("The server answered with an unexpected byte range. Start the download again.");
-                    restarted = true;
-                    continue;
+                    // A partial response that cannot be placed at the requested offset would leave a hole or write
+                    // duplicate bytes, so the resume stops here and the saved data stays untouched.
+                    throw new DownloadLinkExpiredException("The server answered with a byte range that does not start at the saved position.");
                 }
 
                 if (response.StatusCode == HttpStatusCode.PartialContent && ValidatorChanged(state, etag, lastModified))
                 {
-                    // A different ETag/Last-Modified means the bytes on disk are from another version of the file.
-                    // The response body still starts at the old offset, so the request has to be repeated from zero:
-                    // appending it to a truncated file would write the middle of the new file into the start of ours.
-                    TryDelete(partial);
-                    TryDeleteCheckpoint(metaPath);
-                    offset = 0;
-                    if (restarted) throw new IOException("The remote file changed while the download was paused. The download was restarted.");
-                    restarted = true;
-                    continue;
+                    // A different ETag/Last-Modified means the bytes on disk are from another version of the file:
+                    // appending would mix two builds into one silently corrupt file.
+                    throw new DownloadLinkExpiredException("The file on the server changed since this download was paused.");
                 }
 
                 var contentLength = response.Content.Headers.ContentLength;
-                var skip = 0L;
                 if (response.StatusCode == HttpStatusCode.OK && offset > 0)
                 {
-                    // The server ignored the range — a weak If-Range validator always makes it do so. When this
-                    // response is provably the same length as the bytes already on disk and the validator did not
-                    // change, those bytes are kept and the matching prefix of this full response is skipped, so the
-                    // transfer continues instead of starting over. Otherwise nothing is appended.
-                    var sameLength = contentLength is long length && state is { TotalBytes: > 0 } known && known.TotalBytes == length;
-                    if (sameLength && !ValidatorChanged(state, etag, lastModified)) skip = offset;
-                    else offset = 0;
+                    // The server ignored the range, so it will not continue from the saved byte — either it cannot
+                    // resume or the link now points at a different resource. Re-downloading from zero here is
+                    // exactly the silent restart that must never happen; the partial file is kept instead.
+                    throw new DownloadLinkExpiredException("The server sent the whole file instead of the part after the saved position, so this link cannot resume.");
                 }
 
-                var total = contentRange?.Length ?? (contentLength is long full ? full + offset - skip : null);
+                var total = contentRange?.Length ?? contentLength;
                 if (total is long expected) EnsureFreeSpace(destination, Math.Max(0, expected - offset));
 
                 DownloadCheckpoint.Write(metaPath, new DownloadCheckpoint(1, uri.ToString(), finalUrl, name, total ?? 0, offset, etag, lastModified, rangeSupported, 1, [offset]));
@@ -212,15 +202,6 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
                     var persistAt = Stopwatch.StartNew();
                     try
                     {
-                        // The part of a full response that is already on disk is discarded, not downloaded twice.
-                        for (var remaining = skip; remaining > 0;)
-                        {
-                            var read = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(BufferSize, remaining)), guard.Token);
-                            if (read == 0) break;
-                            guard.Touch();
-                            remaining -= read;
-                        }
-
                         while (true)
                         {
                             var read = await input.ReadAsync(buffer, guard.Token);
@@ -290,27 +271,33 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
 
     /// <summary>
     /// Downloads several byte ranges at once. <paramref name="resume"/> carries the previous per-segment byte
-    /// counts; <paramref name="requestedName"/> is only used for a fresh transfer. Returns null when the server
-    /// cannot honour ranges, so the caller falls back to a single resumable connection.
+    /// counts and its own length/validator, so a resume starts its ranges immediately instead of probing first;
+    /// <paramref name="requestedName"/> is only used for a fresh transfer. Returns null when the server cannot
+    /// honour ranges, so the caller falls back to a single resumable connection.
     /// </summary>
     private async Task<DownloadResult?> SegmentedAsync(Uri uri, string directory, DownloadCheckpoint? resume, string? requestedName, int connectionCount, RateLimiter? limiter, IProgress<DownloadProgress>? progress, CancellationToken cancellationToken, IReadOnlyList<Uri>? mirrors = null, IReadOnlyDictionary<string, string>? headers = null)
     {
+        // A resume already knows the address, length and validator from its checkpoint, so asking the server for
+        // them again only adds a round trip before the transfer can continue. The per-segment Range requests that
+        // follow are the real validation: each one either returns the exact bytes the checkpoint expects or the
+        // resume fails with the partial file untouched.
+        var resuming = resume is { TotalBytes: > 0 };
         ProbeResult probe;
-        try
+        if (resuming)
         {
-            probe = await ProbeAsync(uri, headers, cancellationToken);
+            probe = FromCheckpoint(resume!, uri);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException)
+        else
         {
-            if (resume is null) return null;
-            probe = FromCheckpoint(resume, uri);
+            try
+            {
+                probe = await ProbeAsync(uri, headers, cancellationToken);
+            }
+            catch (Exception exception) when (exception is HttpRequestException or IOException)
+            {
+                return null;
+            }
         }
-
-        // A probe can be refused (416, or a 200 for the one-byte range) even though real ranges still work. A resume
-        // must never depend on it: the checkpoint already knows the total and the validator, and the per-segment
-        // requests are the real test.
-        if ((!probe.RangeSupported || probe.Total is not long probed || probed <= 0) && resume is { TotalBytes: > 0 })
-            probe = FromCheckpoint(resume, uri);
 
         if (!probe.RangeSupported || probe.Total is not long total || total <= 0) return null;
 
@@ -324,10 +311,9 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
 
         if (resume is not null && (!SameResource(resume, probe) || resume.TotalBytes != total))
         {
-            // The remote file changed (or the metadata disagrees): never combine bytes from two versions.
-            TryDelete(partial);
-            TryDeleteCheckpoint(metaPath);
-            resume = null;
+            // The remote file changed (or the metadata disagrees): never combine bytes from two versions, and never
+            // delete what is already on disk either. The user decides whether to download it again.
+            throw new DownloadLinkExpiredException("The file on the server changed since this download was paused.");
         }
 
         var segments = resume is { Segments: > 1 } ? Math.Min(resume.Segments, MaxSegments) : Math.Clamp(connectionCount, 2, MaxSegments);
@@ -367,7 +353,7 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
             new(1, uri.ToString(), finalUrl, name, total, downloaded, probe.ETag, probe.LastModified, true, segments, written.ToArray());
 
         DownloadCheckpoint.Write(metaPath, Snapshot(initial));
-        progress?.Report(new DownloadProgress(initial, total, 0, destination));
+        progress?.Report(new DownloadProgress(initial, total, 0, destination, written.ToArray()));
 
         using var guard = new StallGuard(cancellationToken, StallTimeout);
         using var runCts = CancellationTokenSource.CreateLinkedTokenSource(guard.Token);
@@ -379,7 +365,7 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
                 if (reportAt.ElapsedMilliseconds < 100) return;
                 reportAt.Restart();
                 var value = Interlocked.Read(ref aggregate[0]);
-                progress?.Report(new DownloadProgress(value, total, Math.Max(0, value - startBytes) / Math.Max(clock.Elapsed.TotalSeconds, .001), destination));
+                progress?.Report(new DownloadProgress(value, total, Math.Max(0, value - startBytes) / Math.Max(clock.Elapsed.TotalSeconds, .001), destination, written.ToArray()));
                 if (persistAt.ElapsedMilliseconds < 1500) return;
                 persistAt.Restart();
                 DownloadCheckpoint.Write(metaPath, Snapshot(value));
@@ -407,6 +393,13 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
                 (range.To is long to && to != end) ||
                 (range.Length is long length && length != total))
             {
+                if (resuming)
+                {
+                    // The link cannot serve the exact bytes this transfer still needs. Restarting the whole file
+                    // here (as a fresh transfer would) would discard the paused progress, so it is refused.
+                    throw new DownloadLinkExpiredException($"The server refused the byte range this download needs (HTTP {(int)response.StatusCode}).");
+                }
+
                 noRanges[0] = true;
                 throw new RangeUnsupportedException();
             }
@@ -502,33 +495,39 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
         var endpoints = new List<Uri> { primary };
         if (mirrors is not { Count: > 0 }) return endpoints;
 
-        foreach (var mirror in mirrors)
+        // Every mirror is checked at the same time: one slow mirror must not delay the resume it was meant to help.
+        var candidates = mirrors.Where(mirror => mirror != primary).ToList();
+        var checks = candidates.Select(async mirror =>
         {
-            if (mirror == primary) continue;
             try
             {
                 var probe = await ProbeAsync(mirror, headers, cancellationToken);
-                if (!probe.RangeSupported || probe.Total != total) continue;
+                if (!probe.RangeSupported || probe.Total != total) return null;
                 // The mirror must present the same validator the primary did; an absent one proves nothing.
                 if (!string.IsNullOrEmpty(etag))
                 {
-                    if (string.IsNullOrEmpty(probe.ETag) || !string.Equals(etag, probe.ETag, StringComparison.Ordinal)) continue;
+                    if (string.IsNullOrEmpty(probe.ETag) || !string.Equals(etag, probe.ETag, StringComparison.Ordinal)) return null;
                 }
                 else if (!string.IsNullOrEmpty(lastModified))
                 {
-                    if (string.IsNullOrEmpty(probe.LastModified) || !string.Equals(lastModified, probe.LastModified, StringComparison.Ordinal)) continue;
+                    if (string.IsNullOrEmpty(probe.LastModified) || !string.Equals(lastModified, probe.LastModified, StringComparison.Ordinal)) return null;
                 }
-                endpoints.Add(mirror);
+                return mirror;
             }
             catch (Exception exception) when (exception is HttpRequestException or IOException)
             {
                 // A mirror that cannot answer is simply not used.
+                return null;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 // Its probe timed out; the transfer itself is still fine without it.
+                return null;
             }
-        }
+        });
+
+        foreach (var verified in await Task.WhenAll(checks))
+            if (verified is not null) endpoints.Add(verified);
         return endpoints;
     }
 
@@ -591,6 +590,15 @@ public sealed class HttpDownloadEngine(HttpClient httpClient) : IDownloadEngine
         if (lastModified is not null && state.LastModified is { Length: > 0 } storedDate) return !string.Equals(lastModified, storedDate, StringComparison.Ordinal);
         return false;
     }
+
+    /// <summary>
+    /// True for the answers that mean this address no longer serves the file: signed-out, forbidden, removed, or
+    /// pointed at something else. Anything else (a 5xx, a gateway timeout, a throttled 429) is a server problem
+    /// worth retrying, not an expired link.
+    /// </summary>
+    private static bool IsLinkGone(HttpStatusCode status) =>
+        status is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+            or HttpStatusCode.NotFound or HttpStatusCode.Gone;
 
     private static ProbeResult FromCheckpoint(DownloadCheckpoint resume, Uri uri) =>
         new(true, resume.TotalBytes, resume.FileName, resume.ETag, resume.LastModified, resume.FinalUrl ?? uri.ToString());

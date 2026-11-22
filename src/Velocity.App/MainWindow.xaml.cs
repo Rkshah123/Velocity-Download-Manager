@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -20,25 +19,28 @@ public partial class MainWindow : Window
     private readonly DownloadManager _downloadManager;
     private readonly SettingsService _settings;
     private readonly SchedulerService _scheduler;
-    private readonly DispatcherTimer _browserInboxTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DownloadCoordinator _coordinator;
     private readonly DispatcherTimer _trayStatusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _clipboardTimer = new() { Interval = TimeSpan.FromMilliseconds(900) };
     private readonly DispatcherTimer _copyIconTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private System.Windows.Shapes.Path? _copiedIcon;
     private Geometry? _copiedIconData;
     private readonly HashSet<string> _offeredClipboard = [];
+    // A refused resume is reported once; the row itself keeps showing the state until the user acts on it.
+    private readonly HashSet<DownloadItem> _reportedExpiry = [];
     private string? _lastClipboardText;
     private ListCollectionView? _view;
 
     public ObservableCollection<DownloadItem> Downloads { get; } = [];
     public ObservableCollection<LibraryFilter> Filters { get; } = [];
 
-    public MainWindow(DownloadManager downloadManager, SettingsService settings, SchedulerService scheduler)
+    public MainWindow(DownloadManager downloadManager, SettingsService settings, SchedulerService scheduler, DownloadCoordinator coordinator)
     {
         InitializeComponent();
         _downloadManager = downloadManager;
         _settings = settings;
         _scheduler = scheduler;
+        _coordinator = coordinator;
         DataContext = this;
 
         BuildFilters();
@@ -52,24 +54,37 @@ public partial class MainWindow : Window
         FilterList.SelectedIndex = 0;
         Downloads.CollectionChanged += (_, _) => OnLibraryChanged();
         _downloadManager.ItemRegistered += OnItemRegistered;
-        _browserInboxTimer.Tick += async (_, _) => await ProcessBrowserInboxAsync();
+        _coordinator.CaptureStarted += OnCaptureStarted;
         _trayStatusTimer.Tick += (_, _) => UpdateTrayStatus();
         _clipboardTimer.Tick += (_, _) => OfferClipboardLink();
         _copyIconTimer.Tick += (_, _) => RestoreCopyIcon();
         Loaded += OnLoaded;
-        StateChanged += OnStateChanged;
         Closed += (_, _) => Detach();
     }
 
-    private bool _trayHintShown;
-
-    private void OnStateChanged(object? sender, EventArgs e)
+    /// <summary>
+    /// X on the library keeps unfinished downloads alive: the window is hidden into the notification area instead of
+    /// being closed and taking the paused transfers with it. With nothing left to do it closes as it always has.
+    /// </summary>
+    protected override void OnClosing(CancelEventArgs e)
     {
-        if (WindowState != WindowState.Minimized) return;
-        Hide();
-        if (_trayHintShown) return;
-        _trayHintShown = true;
-        (Application.Current as App)?.ShowNotification("Velocity is still running", "Downloads continue in the background. Use the tray icon to reopen Velocity.");
+        if (Application.Current is App app && app.HideMainWindowInsteadOfClosing(this))
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+
+        base.OnClosing(e);
+    }
+
+    /// <summary>
+    /// A browser capture started while this window was open, so its row is selected and scrolled into view. The
+    /// window itself is not raised: the transfer already has its own window, and this one is only kept in sync.
+    /// </summary>
+    private void OnCaptureStarted(object? sender, DownloadItem item)
+    {
+        if (IsVisible) RevealInLibrary(item);
     }
 
     private void BuildFilters()
@@ -86,11 +101,17 @@ public partial class MainWindow : Window
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+        // A window that was closed while transfers kept running is opened again later: the live rows come from
+        // the manager, so the reopened library shows the same downloads instead of a second copy of them.
+        foreach (var live in _downloadManager.Items) AddItem(live);
+
         var restored = new List<DownloadItem>();
         try
         {
             foreach (var record in await _downloadManager.LoadHistoryAsync())
             {
+                // CreateHistoryItem hands back the row that is already alive in this session, so a download is never
+                // shown twice and its paused state (and partial file) still decides where a resume continues.
                 var item = _downloadManager.CreateHistoryItem(record);
                 AddItem(item);
                 restored.Add(item);
@@ -107,23 +128,22 @@ public partial class MainWindow : Window
         if (_settings.Current.ResumeOnStartup) _downloadManager.ResumeInterrupted(restored);
 
         // A cancelled or failed transfer leaves a partial and its checkpoint behind. No row owns those any more,
-        // so they are removed instead of piling up in the download folder every time Velocity starts.
-        _downloadManager.CleanupAbandonedPartials(restored);
+        // so they are removed instead of piling up in the download folder every time Velocity starts. Every row
+        // on the list owns its partial file, including the transfers still running in the background.
+        _downloadManager.CleanupAbandonedPartials(Downloads);
 
         OnLibraryChanged();
-        _browserInboxTimer.Start();
         _trayStatusTimer.Start();
         _clipboardTimer.Start();
-        await ProcessBrowserInboxAsync();
     }
 
     private void Detach()
     {
-        _browserInboxTimer.Stop();
         _trayStatusTimer.Stop();
         _clipboardTimer.Stop();
         RestoreCopyIcon();
         _downloadManager.ItemRegistered -= OnItemRegistered;
+        _coordinator.CaptureStarted -= OnCaptureStarted;
     }
 
     private void OnItemRegistered(object? sender, DownloadItem item)
@@ -152,12 +172,31 @@ public partial class MainWindow : Window
                 if (_settings.Current.CompletionNotifications && item.Status is DownloadStatus.Completed or DownloadStatus.Failed)
                     Notify(item);
             });
+
+            // A resume the server refused is not a silent row change: the exact message is shown, next to the
+            // download it belongs to, and the partial file is still on disk until the user downloads it again.
+            // It is queued rather than shown inside the status change, so the modal dialog never holds up the
+            // transfer's own completion or the library refresh that belongs with it.
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (item.LinkExpired && IsVisible && _reportedExpiry.Add(item)) ShowExpiredDownloadDialog(item);
+            }));
         }
         else if (e.PropertyName == nameof(DownloadItem.BytesPerSecond))
         {
             // Coalesce live speed updates into a single background pass.
             Dispatcher.BeginInvoke(new Action(UpdateStats), DispatcherPriority.Background);
         }
+    }
+
+    private void ShowExpiredDownloadDialog(DownloadItem item)
+    {
+        var detail = string.IsNullOrWhiteSpace(item.Notice)
+            ? "The partial file was kept. Use \"Download again\" to fetch the file from its original link."
+            : $"{item.Notice}\n\nThe partial file was kept. Use \"Download again\" to fetch the file from its original link.";
+
+        ShowDialog("Cannot resume this download", DownloadLinkExpiredException.DefaultMessage,
+            VelocityDialogKind.Warning, detail: detail);
     }
 
     private void Notify(DownloadItem item)
@@ -167,59 +206,6 @@ public partial class MainWindow : Window
             app.ShowNotification("Download complete", item.FileName);
         else
             app.ShowNotification("Download failed", string.IsNullOrWhiteSpace(item.Error) ? item.FileName : $"{item.FileName} — {item.Error}");
-    }
-
-    private async Task ProcessBrowserInboxAsync()
-    {
-        var inbox = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Velocity", "browser-inbox.jsonl");
-        if (!File.Exists(inbox)) return;
-
-        string[] lines;
-        try
-        {
-            lines = await File.ReadAllLinesAsync(inbox);
-            File.Delete(inbox);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return; // Leave the inbox for the next tick rather than processing it twice.
-        }
-
-        foreach (var line in lines)
-        {
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            try
-            {
-                // Older hosts could prefix the first line with a byte-order mark.
-                using var json = JsonDocument.Parse(line.TrimStart('\uFEFF'));
-                if (!json.RootElement.TryGetProperty("url", out var url)) continue;
-                var requestUrl = url.GetString();
-                if (string.IsNullOrWhiteSpace(requestUrl)) continue;
-                if (Downloads.Any(existing => existing.Url == requestUrl && existing.Status is DownloadStatus.Queued or DownloadStatus.Resuming or DownloadStatus.Downloading or DownloadStatus.Paused)) continue;
-
-                var fileName = json.RootElement.TryGetProperty("filename", out var fileNameElement) ? fileNameElement.GetString() : null;
-                // The page the request came from. A video host (or a signed link) answers only when the
-                // request looks like the player made it, so the browser's Referer is carried through.
-                Dictionary<string, string>? headers = null;
-                if (json.RootElement.TryGetProperty("referer", out var refererElement) && refererElement.ValueKind == JsonValueKind.String)
-                {
-                    var referer = refererElement.GetString();
-                    if (!string.IsNullOrWhiteSpace(referer)) headers = new Dictionary<string, string> { ["Referer"] = referer };
-                }
-
-                var request = new DownloadRequest(requestUrl, _settings.Current.DefaultDownloadDirectory, fileName, _settings.Current.DefaultConnectionCount, Headers: headers);
-                var deferred = json.RootElement.TryGetProperty("action", out var action) && string.Equals(action.GetString(), "later", StringComparison.OrdinalIgnoreCase);
-
-                if (deferred) await _downloadManager.QueueAsync(request);
-                else await _downloadManager.StartAsync(request);
-            }
-            catch (Exception exception) when (exception is JsonException or IOException or InvalidOperationException or ArgumentException)
-            {
-                // A malformed browser entry must never stop the listener.
-            }
-        }
-
-        OnLibraryChanged();
     }
 
     /// <summary>
@@ -246,6 +232,7 @@ public partial class MainWindow : Window
         var added = 0;
         var skipped = 0;
         var failures = new List<string>();
+        DownloadItem? firstStarted = null;
 
         foreach (var request in dialog.Requests)
         {
@@ -258,7 +245,7 @@ public partial class MainWindow : Window
 
             try
             {
-                await _downloadManager.StartAsync(request with { Connections = _settings.Current.DefaultConnectionCount });
+                firstStarted ??= await _downloadManager.StartAsync(request with { Connections = _settings.Current.DefaultConnectionCount });
                 added++;
             }
             catch (Exception exception)
@@ -282,6 +269,10 @@ public partial class MainWindow : Window
         {
             (Application.Current as App)?.ShowNotification("Downloads added", $"{added} downloads started.");
         }
+
+        // The confirmation is closed at this point, so the only window left to open is the transfer's own. A
+        // batch keeps the rest in the library instead of stacking one window on top of another.
+        if (firstStarted is not null) OpenDownloadWindow(firstStarted);
     }
 
     /// <summary>
@@ -322,8 +313,9 @@ public partial class MainWindow : Window
     {
         try
         {
-            await _downloadManager.StartAsync(new DownloadRequest(
+            var item = await _downloadManager.StartAsync(new DownloadRequest(
                 uri.ToString(), _settings.Current.DefaultDownloadDirectory, Connections: _settings.Current.DefaultConnectionCount));
+            OpenDownloadWindow(item);
         }
         catch (Exception exception)
         {
@@ -370,9 +362,56 @@ public partial class MainWindow : Window
 
     private static DownloadItem? ItemFrom(object sender) => (sender as FrameworkElement)?.Tag as DownloadItem;
 
+    /// <summary>
+    /// Opens the XDM-style window for this download, or brings back the one already open for it. The window belongs
+    /// to the coordinator, not to this one, so it survives this window being closed.
+    /// </summary>
+    private void OpenDownloadWindow(DownloadItem item) => _coordinator.Open(item);
+
+    /// <summary>
+    /// Makes sure a download that just started is actually visible in the library: the row is selected and scrolled
+    /// into view, and a filter or search that would hide it is cleared. A transfer the user asked for must never
+    /// start invisibly behind a filter.
+    /// </summary>
+    private void RevealInLibrary(DownloadItem item)
+    {
+        if (!MatchesView(item))
+        {
+            SearchTextBox.Clear();
+            FilterList.SelectedIndex = 0;
+        }
+
+        DownloadsGrid.SelectedItem = item;
+        DownloadsGrid.ScrollIntoView(item);
+    }
+
+    private void WindowClick(object sender, RoutedEventArgs e)
+    {
+        if (ItemFrom(sender) is { } item) OpenDownloadWindow(item);
+    }
+
+    private void DownloadsGridDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (FindVisualParent<ListViewItem>(e.OriginalSource as DependencyObject) is null) return;
+        if (DownloadsGrid.SelectedItem is not DownloadItem item) return;
+        e.Handled = true;
+        OpenDownloadWindow(item);
+    }
+
     private void PauseClick(object sender, RoutedEventArgs e) { if (ItemFrom(sender) is { } item) _downloadManager.Pause(item); }
     private void ResumeClick(object sender, RoutedEventArgs e) { if (ItemFrom(sender) is { } item) _downloadManager.Resume(item); }
     private void RetryClick(object sender, RoutedEventArgs e) { if (ItemFrom(sender) is { } item) _downloadManager.Retry(item); }
+
+    /// <summary>
+    /// Fetches the file again from the link it was originally downloaded from, with the same name, folder and
+    /// headers. Only this explicit choice replaces the partial file that a broken link left behind.
+    /// </summary>
+    private void DownloadAgainClick(object sender, RoutedEventArgs e)
+    {
+        if (ItemFrom(sender) is not { } item) return;
+        _reportedExpiry.Remove(item);
+        _downloadManager.DownloadAgain(item);
+    }
 
     /// <summary>
     /// Copies the address the file was downloaded from — the original link, never the local path, so it can be
@@ -513,6 +552,7 @@ public partial class MainWindow : Window
                 error ??= $"'{item.FileName}' could not be removed: {exception.Message}";
             }
 
+            _coordinator.Close(item);
             item.PropertyChanged -= OnDownloadPropertyChanged;
             Downloads.Remove(item);
         }

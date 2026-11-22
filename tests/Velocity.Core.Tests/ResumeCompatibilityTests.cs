@@ -6,8 +6,8 @@ using Velocity.DownloadEngine;
 namespace Velocity.Core.Tests;
 
 /// <summary>
-/// The server-behaviour matrix: resume must continue from the exact stored byte when the response allows it,
-/// and must restart safely (never append) when it does not.
+/// The server-behaviour matrix: resume must continue from the exact stored byte when the response allows it, and
+/// must refuse (never append, never restart, never delete) when the link cannot continue the transfer.
 /// </summary>
 public sealed class ResumeCompatibilityTests
 {
@@ -52,7 +52,7 @@ public sealed class ResumeCompatibilityTests
     }
 
     [Fact]
-    public async Task RestartsWhenLastModifiedChangesWhilePaused()
+    public async Task RefusesToResumeWhenLastModifiedChangesWhilePaused()
     {
         var payload = Payload(3 * 1024 * 1024);
         using var server = new RangeTestServer(payload) { SendETag = false, VersionedLastModified = true };
@@ -61,14 +61,16 @@ public sealed class ResumeCompatibilityTests
         var request = new DownloadRequest($"{server.BaseUrl}/files/changed-date.bin", folder.Path, "changed-date.bin", Connections: 1);
 
         await PauseAtAsync(engine, request, payload.Length / 3);
+        var partial = Path.Combine(folder.Path, "changed-date.bin.part");
+        var kept = new FileInfo(partial).Length;
 
         var replacement = Payload(3 * 1024 * 1024);
         server.ReplacePayload(replacement);
 
-        var result = await engine.DownloadAsync(request);
+        await Assert.ThrowsAsync<DownloadLinkExpiredException>(() => engine.DownloadAsync(request));
 
-        Assert.Equal(replacement, await File.ReadAllBytesAsync(result.FilePath));
-        Assert.False(File.Exists(Path.Combine(folder.Path, "changed-date.bin.part")));
+        Assert.Equal(kept, new FileInfo(partial).Length);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "changed-date.bin")));
     }
 
     [Fact]
@@ -89,7 +91,7 @@ public sealed class ResumeCompatibilityTests
     }
 
     [Fact]
-    public async Task RestartsFromZeroWhenTheServerAdvertisesRangesButIgnoresThem()
+    public async Task RefusesToResumeWhenTheServerAdvertisesRangesButIgnoresThem()
     {
         var payload = Payload(3 * 1024 * 1024);
         using var server = new RangeTestServer(payload) { HonorRanges = false, AdvertiseRanges = true };
@@ -100,11 +102,12 @@ public sealed class ResumeCompatibilityTests
         var paused = await PauseAtAsync(engine, request, payload.Length / 3);
         Assert.True(paused > 0);
 
-        var result = await engine.DownloadAsync(request);
+        await Assert.ThrowsAsync<DownloadLinkExpiredException>(() => engine.DownloadAsync(request));
 
-        Assert.Equal(payload, await File.ReadAllBytesAsync(result.FilePath));
-        Assert.Contains(server.Requests.Skip(1), request => request.Range is not null);
-        Assert.Equal(payload.Length, new FileInfo(result.FilePath).Length);
+        var partial = Path.Combine(folder.Path, "liar.bin.part");
+        Assert.True(File.Exists(partial));
+        Assert.Equal(paused, new FileInfo(partial).Length);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "liar.bin")));
     }
 
     [Fact]
@@ -232,13 +235,17 @@ public sealed class ResumeCompatibilityTests
         var request = new DownloadRequest($"{server.BaseUrl}/files/segmented-changed.bin", folder.Path, "segmented-changed.bin", Connections: 4);
 
         await PauseAtAsync(engine, request, payload.Length / 3);
+        var partial = Path.Combine(folder.Path, "segmented-changed.bin.part");
+        var kept = DownloadCheckpoint.Read(partial + ".meta")!.DownloadedBytes;
 
         var replacement = Payload(6 * 1024 * 1024, 10);
         server.ReplacePayload(replacement);
 
-        var result = await engine.DownloadAsync(request);
+        await Assert.ThrowsAsync<DownloadLinkExpiredException>(() => engine.DownloadAsync(request));
 
-        Assert.Equal(replacement, await File.ReadAllBytesAsync(result.FilePath));
+        Assert.True(File.Exists(partial), "the segmented partial must survive a refused resume");
+        Assert.Equal(kept, DownloadCheckpoint.Read(partial + ".meta")!.DownloadedBytes);
+        Assert.False(File.Exists(Path.Combine(folder.Path, "segmented-changed.bin")));
     }
 
     private static async Task<long> PauseAtAsync(HttpDownloadEngine engine, DownloadRequest request, long threshold)

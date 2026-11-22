@@ -911,3 +911,323 @@ Verified on this build with real Chrome:
 
 Loading instructions in `EXTENSION-NOTES.md` and `browser-extension/README.md` now point at the installed copy,
 `%LOCALAPPDATA%\Programs\Velocity\browser-extension`, whose path never changes.
+
+## Round 23 — an XDM-style download window
+
+The library showed a transfer only as a row. The user asked for the window XDM opens beside a download, in both of
+its sizes, keeping Velocity's own theme and adding the speed limit that XDM's small window does not have.
+
+**`DownloadWindow.xaml`** is one window with two layouts. The big one carries the drawn caption `[ 5% ] name`, a
+ring, the name, the status line, `Downloaded n%` against `bytes / total`, the progress bar, and `Speed …` against the
+time left, then `Less` on the left and `Speed limit`, `Hide`, `Pause` on the right, over the connection table. `Less`
+switches to the small layout (narrower window, wrapped name, tighter rows, `More`/`Hide`/`Pause`) at the same
+information density as the reference screenshot, and resizes the window with it. Everything else keeps the existing
+brushes and button styles, so all themes work unchanged; the caption is a `WindowChrome` bar so a dark window does
+not grow a light system title bar.
+
+**`ProgressRing`** is a small `FrameworkElement` that draws the track circle and the finished arc itself. It takes
+`Value` plus track/fill brushes as dependency properties, so it repaints on every progress report and follows a
+theme switch like any other control.
+
+**Connection table.** `DownloadProgress` now carries `ConnectionBytes` — the bytes each segment has written — which
+the segmented engine reports inside its existing 100 ms report gate. `DownloadManager` copies it onto the item, which
+clears it at the start of every attempt so a retry that falls back to one connection cannot leave stale rows. The
+window builds one row per connection (# / Status / Downloaded), with `Downloading`, `Completed`, `Waiting`, `Paused`,
+`Stopped` or `Failed` derived from the item's status and the bytes written against each connection's share.
+
+**Reaching it.** Double-clicking a download in the library opens its window, and a new window icon on each card does
+the same; a second click brings the existing window back instead of opening a duplicate. Deleting a download closes
+its window. Nothing opens on its own — capture still never throws a window at the user.
+
+Verified: `dotnet build Velocity.slnx` — 0 warnings, 0 errors; both layouts rendered from a throwaway harness
+(`artifacts/window-preview/`) and checked against the two reference screenshots. The window was not driven against a
+real active transfer in the running app.
+
+## Round 24 — capture end to end: offer, then window, then library
+
+Round 23 built the window but only opened it from the library, so a link captured from the browser still started
+silently: the in-page offer card asked, the transfer began, and nothing else happened. That is not the XDM flow the
+user described (ask → downloading window → progress visible in the main window).
+
+**Captures now finish the flow.** When the browser inbox delivers an accepted `download` entry,
+`ProcessBrowserInboxAsync` starts it, raises the main window (`BringToFront`) and opens that transfer's
+`DownloadWindow` immediately, so the window is on screen while the bytes arrive instead of after the fact. Entries the
+user sent with "Download later" still queue quietly, and nothing opens on its own for history, startup or a plain
+page load — the extension's offer card is the ask, and this reacts only to its accepted answer.
+
+**The library always shows it.** `RevealInLibrary` selects the new row and scrolls the grid to it, clearing an active
+filter or search that would otherwise hide the transfer. The window and the library read the same `DownloadItem`, so
+speed, progress, pause/resume and the speed limit stay in step in both places.
+
+**Theme.** No colour was added: the window, the ring, the table and all buttons still use the brushes in
+`Resources/Theme.xaml`, so Midnight, Ember and Light look like the rest of Velocity rather than XDM's blue palette.
+
+Verified: `dotnet build Velocity.slnx` — 0 warnings, 0 errors; installer rebuilt and installed so the running app is
+this build. Not verified: a real capture driven from Chrome in this session.
+
+## Round 25 — the two windows are independent, and the confirmation matches the transfer window
+
+The user's list exposed three structural mistakes, not cosmetic ones. The download window was created with the
+library as its `Owner`, so Windows closed it with the library and the pair could never be closed independently. The
+library hid itself from the desktop whenever it was minimized, so it left the taskbar and could not be restored from
+it. And the confirmation dialog was still 580 wide with `SizeToContent="Height"`, so accepting a download swapped a
+small window for a 900x560 one.
+
+**One owner for both windows.** `DownloadCoordinator` now owns the window of every transfer and the browser-inbox
+listener. A `DownloadWindow` is a top-level window with no owner: closing the library leaves it open and the transfer
+running, and closing it never touches the library. Because the listener moved up to the application, a capture that
+arrives while the library is closed still starts and still gets its window. Deleting a download closes only that
+download's window, through the same coordinator.
+
+**The application decides when to exit.** `ShutdownMode` is now `OnExplicitShutdown`:
+`App.NotifyWindowClosed` keeps the process alive while another window is visible or `DownloadManager.HasActiveTransfers`
+is true, and shuts down on the last window of an idle application — the same exit the user gets today. A closed WPF
+window cannot be shown again, so the tray icon builds a new library window, and `DownloadManager.Items` plus the
+history load fills it without a second row for a transfer that is already running; the abandoned-partial sweep now
+sees those live rows too.
+
+**Minimize means minimize.** The `StateChanged` handler that called `Hide()` is gone. The library stays a normal
+taskbar window, leaves the desktop when minimized and comes back from its taskbar button; the tray icon still opens
+it as well.
+
+**One size for the confirmation.** `AddDownloadWindow` is 900x560 like `DownloadWindow`, `ResizeMode="NoResize"`, with
+its content in the scroll viewer it already had. Accepting it closes it and opens the transfer's window; a batch keeps
+only its first window and the rest of the rows in the library, and the library is no longer raised in front of the
+window that the user actually asked for. Starting from the clipboard prompt opens that window too.
+
+Verified with `artifacts/window-flow-check.ps1` against the Debug build and a real 8 MB transfer from
+`artifacts/e2e/slow-server.js` — all five scenarios pass: the confirmation window and the download window have the
+same 900x560 DIP outer size (1125x700 device px at 125%); accepting closes the dialog and leaves exactly the library
+and the one download window; minimizing the library parks only it off the desktop and the transfer window keeps
+running; closing the transfer window leaves the library and the process untouched; closing the library mid-transfer
+leaves the process and the download window alive, the partial keeps receiving writes, and the file completes to
+8 388 608 bytes with no library window open. The last window of an idle application still ends the process.
+Not verified: a click on the extension's card in Chrome in this session.
+
+## Round 26 — resume is fast and honest, and Velocity stays in the tray
+
+**Resume no longer validates with a separate request.** A paused download already knows its address, length and
+validator from the checkpoint beside the partial file, so `SegmentedAsync` goes straight to its per-segment `Range`
+requests instead of asking the server for the length first — one whole round trip (and the server work behind it)
+removed from every resume. The range responses are the validation: each one either starts at the exact saved byte or
+the resume is refused. Mirror probes, when mirrors are configured, now run concurrently instead of one after another.
+On the device the first progress report after Resume arrives in 24–34 ms, and the server log shows four segment
+requests resuming exactly the bytes in the checkpoint, with no `bytes=0-0` probe at all.
+
+**A resume never restarts or deletes anything.** `HttpDownloadEngine` used to treat `200 OK`, an unexpected `206`, a
+changed `ETag`/`Last-Modified`, or `416` as "start over", truncating or deleting the partial file. That is exactly the
+silent restart the user forbade, so every one of those answers now raises the new
+`DownloadLinkExpiredException` (message: "Download link is broken or expired. You need to download this file again.")
+and leaves both the `.part` and its checkpoint untouched. `401/403/404/410` on a resume are treated the same way; a
+`5xx` or timeout keeps the ordinary retry path. A `416` whose total matches the saved bytes still completes the file
+without a transfer. The download's original URL is what is stored and reused (the resolved `FinalUrl` stays only as a
+record), so a download keeps its own link across pause, close and restart.
+
+**Broken links have their own state and their own action.** `DownloadItem.LinkExpired` drives a "Link expired" status,
+keeps "Retry" hidden, and adds a "Download again" row action (and the transfer window's primary button). That action
+is the only place a partial file is deleted, and it reuses the original link, headers, name and folder. The library
+shows the exact sentence in a themed dialog once per download, with the server's reason underneath and a note that the
+partial file was kept. The dialog is queued after the status change rather than shown inside it, so a modal window can
+never stall the transfer's own completion; the first attempt at showing it from inside `Dispatcher.Invoke` never
+appeared, which is why it is now posted to the dispatcher.
+
+**The tray keeps unfinished downloads.** Closing the library with anything running, queued, paused or failed hides the
+window into the notification area instead of destroying it (`App.HideMainWindowInsteadOfClosing`), keeps the process
+alive (`App.NotifyWindowClosed` → `DownloadManager.HasUnfinishedDownloads`), and the tray icon brings the very same
+window back with its rows. The tray menu now reads "Open Velocity" and "Force quit Velocity", and force quit bypasses
+the hide rule (`App.ForceQuit`). History rows are registered with the manager, so a paused download from an earlier
+session counts as unfinished and a second copy of it can never appear when the library is rebuilt.
+
+**A browser hand-off stays out of the user's way.** The native host writes the inbox entry and then starts the app, so
+startup can tell why it was launched: with a pending capture the library is created with `ShowActivated=false` and
+`Minimized`, and the inbox is processed immediately instead of waiting for the first two-second tick. The only window
+on screen is the transfer's; the library appears when the user clicks its taskbar button or the tray icon.
+
+**The confirmation window grew.** `AddDownloadWindow` is now 960x640 (was 900x560) and `DownloadWindow` matches it, so
+the two windows keep the same size while the form's file name, folder, referer, cookie, mirror and header fields all
+fit without scrolling.
+
+Verified with `artifacts/resume-check.ps1` (new, `artifacts/e2e/resume-server.js` as the 24 MB range server) against
+the Debug build, all checks passing: the confirmation window measures 960x640 DIP (1184x792 px at 125%); a download
+paused at 25% resumes with its first progress report after 29 ms and four range requests that continue exactly the
+6 553 600 bytes in the checkpoint, without a probe request, and finishes byte-identical (SHA-256); a link turned into
+a 404 while paused produces the exact required message, keeps `.part` + `.part.meta` at the same byte count, offers
+"Download again", and that action re-downloads from the original link to a byte-identical file; closing the library
+with a paused download hides the window while the process lives, one click on the notification-area icon restores it,
+double-clicking the paused row restores its transfer window, Resume finishes the file, and Force quit from the tray
+menu ends the process; a browser hand-off started the app with the library minimized and only the transfer window
+visible. `dotnet test` passes 77/77 after the resume tests were rewritten to the new contract (a refused resume must
+throw, keep the partial bytes and never write the destination file). Re-run against the rebuilt installer's build
+(`%LOCALAPPDATA%\Programs\Velocity\Velocity.App.exe`) it reports 0 failures: every check above passes on the installed
+build, including Force quit from the tray menu.
+
+Test note: the notification-area icon lives in Windows 11's overflow flyout, which ignores scripted mouse input, so
+`artifacts/resume-check.ps1` opens the tray menu the way the shell does — by sending the app's NotifyIcon window the
+right-click callback — and then invokes "Force quit Velocity" through UI Automation. The tray icon's own left-click
+action is exercised through its `Invoke` pattern. Both are the application's real handlers, not stand-ins.
+
+## Round 27 — a finished transfer's window leaves the screen
+
+`DownloadWindow` closed only when the user closed it, so a download that reached 100% left its window sitting on
+screen. `LeaveOnCompletion` now watches the item's status: when it becomes `Completed` the window closes itself once,
+posted at `Background` dispatcher priority so the final 100% frame paints first. Paused, failed and cancelled
+downloads keep their windows — the rule is only about a finished transfer — and the library is untouched behind it.
+
+Verified with `artifacts/window-close-check.ps1` (new, `artifacts/e2e/close-test-server.js` as a ~1 MB/s range server)
+against the real Debug build, 0 failures: the transfer window opens, is still on screen at 28% and 78% while bytes
+move, disappears once the file completes, the library window is still there, and the 4 194 304-byte file is complete
+on disk. `dotnet build Velocity.slnx` is clean (0 warnings, 0 errors). The installer was rebuilt and silently
+installed, and the same check reports 0 failures against `%LOCALAPPDATA%\Programs\Velocity\Velocity.App.exe`
+(28% → 78% → window gone, library window still present, file complete). The library is often minimized at that point,
+which the check accepts: the point is that the transfer window left and nothing else did.
+
+## Round 28 — Velocity for Android
+
+The phone app now lives in `android/`: Kotlin, one Gradle module (`com.velocity.downloader`, minSdk 26, target 35,
+compileSdk 36, AGP 8.13.2, Kotlin 2.2.21), no Compose and no Room, so the whole APK is under 4 MB and builds offline
+from the installed SDK.
+
+**Paste, tap Download.** `MainActivity` takes any http/https link (typed, pasted, or shared to Velocity through
+`ACTION_SEND`), shows the Download button directly under the field, and sends the row to the service. Analysis happens
+in the service — HEAD first, then `Range: bytes=0-0` when HEAD is refused or says nothing useful — and fills in the
+name (`Content-Disposition`, then the redirected path, then the link), the length, the content type and whether ranges
+work. A missing length or content type never blocks the download. The folder comes from Android's own folder picker
+(`ACTION_OPEN_DOCUMENT_TREE`, persisted), and without a choice the file lands in the shared Downloads collection
+through MediaStore.
+
+**The engine** (`core/DownloadEngine.kt`) preallocates the file and splits a known, range-capable download over four
+connections that each own a byte range and can be retried on their own; a server that answers a ranged request with
+`200 OK` drops the transfer to one stream instead of failing. Range offsets are validated against the saved total and
+`ETag`, each connection resumes from its own written bytes after a drop, and a checkpoint file (`<id>.meta`) is
+rewritten every half second so a process death continues from where it stopped rather than from zero. `429` and `408`
+retry with backoff; `401/403/404/410` stop with the server's actual reason and keep the partial file. Transfers never
+overwrite: a finished file gets a unique name in the chosen folder, and the same link cannot be queued twice while it
+is running or paused.
+
+**Background and lifetime.** `DownloadService` is a `dataSync` foreground service with a progress notification
+(pause/resume/cancel actions), a partial wake lock while bytes move, a queue of three concurrent transfers, and
+`START_STICKY`; anything the system stops is re-queued on the next start, and opening the app puts a stalled queue back
+to work. Pause stops the streams and keeps the bytes, resume continues from them, cancel deletes the partial file.
+
+Verified on the connected Realme RMX3785 (Android 15) with the debug APK installed by adb:
+`gradle testDebugUnitTest` passes; a real GitHub archive download followed the redirect, used the server's name, and
+produced a valid 12 849 721-byte zip with 4 625 entries; a 200 MB throttled local file paused at 136 429 568 bytes and
+stayed there, resumed from exactly that byte to completion; the same file grew from 71 MB to 122 MB with the app in
+the background and had its notification present; a force-stop plus reopen continued past 153 MB and finished at
+209 715 200 bytes; `404` produced "The server has no file at that address (HTTP 404). The link may have expired."; a
+chunked 8.4 MB response with no length completed and was saved under its `Content-Disposition` name; a 4 MB
+no-range server completed over a single connection; the same link queued twice produced one row; `logcat` showed no
+crashes.
+
+Known limits, stated rather than hidden: Android has no FTP client, so `ftp://` and `magnet:` links are refused with an
+explanation instead of a fake attempt; DRM, paywalls and sign-in walls are not bypassed — cookies from the browser's
+cookie store are sent when the platform has them; the APK is debug-signed because no release keystore exists in the
+repository.
+
+## Round 29 — the Android settings experience, in two themes
+
+The phone app now wears the reference designs instead of the first-pass look. Every colour in the app comes from two
+themes — **Dark Jet Black** and **Beige** — declared as attributes (`values/attrs.xml`) and resolved through
+`Theme.Velocity.Dark` / `Theme.Velocity.Beige`. Layouts, drawables, switches, radios, sliders, dialogs, the status bar
+and the notification-free surfaces all read those attributes, so no screen can drift into a third palette.
+`ThemedActivity` applies the saved theme before inflation and recreates a screen when the theme changes underneath it;
+the Home screen also flips its status-bar icons to dark in Beige so they stay legible.
+
+**Settings** (`ui/SettingsActivity`) follows `mob/setting.png`: slate/brown app bar, a card with the theme dropdown
+("Dark Jet Black" / "Beige"), then one card with exactly four rows — Download Settings, Traffic Limits, About, Quit.
+
+**Download Settings** (`ui/DownloadSettingsActivity`) reproduces `mob/donw.png`: the five switches (start without
+confirmation, remove deleted files, remove completed downloads, do not download web pages, server time for file
+creation) and the Default download folder block — automatic folder radio with the two indented "suggest folders"
+switches (by file type, by URL), fixed-folder radio with the picker field, folder button and the chosen path shown in
+accent underneath. The switches are not decoration: a confirmation dialog appears before a transfer when the first
+switch is off, finished rows vanish when the third is on, `text/html` links are refused with an explanation when the
+fourth is on, MediaStore files take the server's `Last-Modified` when the fifth is on, and the folder radios decide
+where `OutputStore` writes. Suggested folders create `Download/Velocity/Images` (or Videos, Audio, Documents, Archives,
+Apps, Other) and add the host when the URL switch is on; with no suggestion the file still lands directly in Downloads.
+
+**Traffic Limits** (`ui/TrafficLimitsActivity`) reproduces `mob/traffic.png`: two expandable sections with rotating
+chevrons. "Download speed" holds a slider over Unlimited, 64 KB/s … 32 MB/s, and "Maximum number of simultaneous
+downloads" holds a −/+ stepper (1–8). Both persist and apply live: `BandwidthLimiter` is one shared token bucket used
+by every connection in the app, and `DownloadService` reads the concurrency value on each pump (and re-pumps when it
+changes).
+
+**About** reads the real package version (1.0.0) instead of a hard-coded string, names Shahrukh Rais Khan as developer,
+and uses the actual Velocity emblem. **Quit** asks "Do you want to exit from Velocity?" and only closes the app on Yes.
+
+**Icon.** `icon.png` in the repository root is the source: the V emblem was cropped and written to all five legacy
+densities (`mipmap-mdpi…xxxhdpi`, 48–192 px), round variants, and adaptive-icon foreground layers (108–432 px) over a
+black background, with `mipmap-anydpi-v26` XML for both launcher icons. The old placeholder vector was deleted.
+
+Verified on the connected Realme RMX3785 (Android 15): `gradle assembleDebug testDebugUnitTest` passes; the debug APK
+was installed by adb and each screen was inspected in both themes (Settings, Downloads settings, Traffic limits, About,
+the theme dialog and the Quit dialog; the status bar now shares the app bar colour). Functional checks: setting the
+slider to 256 KB/s made a 4 MB single-connection transfer take 15 s (≈280 KB/s measured from the store); with the
+concurrency stepper at 1, a second queued link stayed `QUEUED` at 0 bytes while the first was `DOWNLOADING`; settings
+survived a force-stop (theme, limit and concurrency all restored); Quit with Yes removed every Velocity activity from
+the task. All test downloads, partial files, `downloads.json` and the `Download/Velocity` test folder were removed, the
+speed limit was returned to Unlimited, concurrency to 3, and the theme to Dark Jet Black.
+
+Known limits, stated rather than hidden: "Use server time" can only stamp the file through MediaStore — SAF has no API
+to set a document's modification time, so the fixed-folder path keeps the device's clock; the two "suggest folders"
+switches belong to automatic mode, exactly as the reference nests them, and are disabled while a fixed folder is
+chosen; the speed limit is per app, not per transfer, because that is what the reference screen describes.
+
+## Round 30 — pasted links that were dropped or called dead
+
+Three real failures were reproduced on the phone before any code was touched. **A link pasted without its scheme**
+(`samplelib.com/mp4/sample-5s.mp4`) or **shared together with its title** ("Check this video https://… nice") never
+reached the box at all: both the share intent and the clipboard prefill only accepted text that began with `http`, so
+the field stayed empty and Download answered "Paste a download link first". **A `http://` link that redirects to
+`https://`** failed with "The server redirected the request somewhere that could not be followed (HTTP 301)", because
+`HttpURLConnection` only follows redirects inside one protocol; a 308 was not followed at all and left the row
+`ANALYZING`. Direct `https` file links did work, which is why the bug looked intermittent.
+
+`core/Links` now turns pasted text into a fetchable address: it finds an `http(s)` link inside surrounding words,
+accepts a bare host (with or without `www.`, with a port, or an IPv4 address) and assumes `https://`, drops quotes,
+brackets and sentence punctuation around it, percent-encodes spaces and non-Latin characters, and refuses text with
+no link at all or a scheme Android cannot fetch (`ftp:`, `magnet:` still get their explanation). `MainActivity` uses
+it for Download, the share intent and the clipboard prefill.
+
+`Http.open` now follows redirects itself — 301, 302, 303, 307 and 308, absolute, protocol-relative and relative
+`Location`, across `http`↔`https`, up to ten hops, with the `Range` header preserved on every hop and a clear message
+for a redirect with no destination or an endless loop. Because some CDNs answer 403 only to a client that is not a
+browser, a 403 is retried once with a browser User-Agent before it is reported (a caller-supplied agent is never
+overridden). `UrlAnalyzer` also retries its probe without a range when a server answers 416/400/405 to `bytes=0-0`,
+and its probe timeouts grew to 20 s so a slow mobile network is not mistaken for a dead link. `FileNames` no longer
+turns a literal `+` in a path into a space.
+
+Verified on the Realme RMX3785 (Android 15) with the rebuilt APK: `gradle assembleDebug testDebugUnitTest` passes,
+including new `LinksTest` cases for every paste shape. On the device, all of these completed with the right name and
+byte count: scheme-less `samplelib.com/mp4/sample-5s.mp4`, share text with words around the link, a quoted URL,
+`http://` → `https://` 301, an mp3 reached through a 301 to another host, and — against a local server — 308, 307 and
+302 with relative, absolute and same-origin `Location`s. A local endpoint that returns 403 unless the agent looks like
+a browser completed through the fallback, and a normal direct mp4 still completed after the change. Every test file,
+`downloads.json` and the temporary servers were removed and `adb reverse` cleared afterwards.
+
+Known limits, stated rather than hidden: a link to a **web page** (YouTube, Instagram, a file host's share page and
+similar) is still refused while "Do not download web pages" is on, exactly as that setting says; Velocity does not
+extract media out of page HTML, JavaScript players, DRM or sign-in walls, so such links must be the direct file
+address. Sites that require a sign-in cookie can still refuse the request.
+
+## Round 31 — the mobile app and the desktop work published
+
+The repository on GitHub held only the Windows build and the browser extension, while this working copy carried two
+finished pieces that had never left the machine: the Android app (rounds 22–30, `android/`) and the desktop round that
+replaced the old inline progress logic with `DownloadCoordinator`, `DownloadWindow` and `ProgressRing` and made the
+engine's resume checkpoints tolerant of link expiry (`DownloadLinkExpiredException`).
+
+Everything under `android/` is now tracked — 76 source, resource and Gradle files, with `.gradle/`, `build/` and
+`local.properties` still ignored, so no SDK path or build output is published. `README.md` gained an **Android app**
+section: what it does, the `assembleDebug` / `testDebugUnitTest` commands, and where the installable APK is attached.
+The screenshots in `mob/` and the loose captures in the repository root stay untracked; they are working files, not
+source.
+
+Release assets are separate from source. A new release, `mobile-v1.0.0`, carries `Velocity-Mobile-1.0.0.apk`
+(4.2 MB, `com.velocity.downloader`, minSdk 26, targetSdk 35) built from this tree; `v1.0.0` keeps the Windows installer
+and portable zip untouched. The APK is the debug-signed build, because the project has no release keystore and an
+unsigned release APK cannot be installed — it installs and updates in place with `adb install -r`, as verified on the
+Realme RMX3785, but it is not a Play-Store-signed artifact.
+
+Verified before publishing: `gradle assembleDebug testDebugUnitTest` and `dotnet build Velocity.slnx` both succeed on
+this tree, so the published source is the source that was built and tested.

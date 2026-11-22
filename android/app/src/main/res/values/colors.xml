@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Jet Black -->
+    <color name="dark_bg">#0E0E0F</color>
+    <color name="dark_surface">#1A1A1C</color>
+    <color name="dark_surface_alt">#242427</color>
+    <color name="dark_stroke">#2C2C30</color>
+    <color name="dark_divider">#2A2A2D</color>
+    <color name="dark_text">#F2F2F3</color>
+    <color name="dark_muted">#A0A0A6</color>
+    <color name="dark_accent">#4F86A8</color>
+    <color name="dark_header">#3D5A6C</color>
+    <color name="dark_track_off">#4A4A4F</color>
+    <color name="dark_thumb_off">#ECECEE</color>
+
+    <!-- Beige -->
+    <color name="beige_bg">#EFE6D6</color>
+    <color name="beige_surface">#F8F1E4</color>
+    <color name="beige_surface_alt">#E9DECB</color>
+    <color name="beige_stroke">#DBCCB2</color>
+    <color name="beige_divider">#E2D5BE</color>
+    <color name="beige_text">#2B2620</color>
+    <color name="beige_muted">#7B6F5D</color>
+    <color name="beige_accent">#8A6A45</color>
+    <color name="beige_header">#6B5A45</color>
+    <color name="beige_track_off">#CBBEA8</color>
+    <color name="beige_thumb_off">#FDF8EE</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="success">#3DDC84</color>
+    <color name="warning">#F5A623</color>
+    <color name="danger">#FF6B6B</color>
+    <color name="icon_background">#000000</color>
+
+    <!-- Kept for the notification icon and any code that still asks for a plain color. -->
+    <color name="bg">#0E0E0F</color>
+    <color name="card">#1A1A1C</color>
+    <color name="card_alt">#242427</color>
+    <color name="stroke">#2C2C30</color>
+    <color name="text">#F2F2F3</color>
+    <color name="muted">#A0A0A6</color>
+    <color name="accent">#4F86A8</color>
+    <color name="accent_dark">#2F6BE0</color>
+</resources>

@@ -68,6 +68,11 @@
     <PathGeometry x:Key="IconGauge" Figures="M3.2,13.6 A7,7 0 1 1 16.8,13.6 M10,14.2 L13.6,8.4 M10,14.2 L10,14.3"/>
     <PathGeometry x:Key="IconClose" Figures="M5.5,5.5 L14.5,14.5 M14.5,5.5 L5.5,14.5"/>
     <PathGeometry x:Key="IconCheck" Figures="M4.6,10.4 L8.3,14.1 L15.4,5.6"/>
+    <!-- A window with its title bar: opens a download's own window. -->
+    <PathGeometry x:Key="IconWindow" Figures="M3,5.4 L17,5.4 L17,15.6 L3,15.6 Z M3,8.4 L17,8.4"/>
+    <!-- Caption button shapes for the download window (10 x 10). -->
+    <PathGeometry x:Key="IconMaximizeShape" Figures="M0.5,0.5 L10.5,0.5 L10.5,10.5 L0.5,10.5 Z"/>
+    <PathGeometry x:Key="IconRestoreShape" Figures="M2.5,0.5 L10.5,0.5 L10.5,8.5 M0.5,2.5 L8.5,2.5 L8.5,10.5"/>
 
     <!-- ═══ Typography ═══ -->
     <Style TargetType="Window">

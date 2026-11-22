@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/vBg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/appBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:background="?attr/vHeader"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/backButton"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:padding="12dp"
+            android:src="@drawable/ic_arrow_back"
+            android:tint="?attr/vOnHeader" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/download_settings_title"
+            android:textColor="?attr/vOnHeader"
+            android:textSize="21sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="24dp">
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/start_without_confirmation" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchConfirm"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <View style="@style/SectionDivider" android:layout_marginStart="16dp" />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/remove_deleted" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchRemoveDeleted"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <View style="@style/SectionDivider" android:layout_marginStart="16dp" />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/remove_completed" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchRemoveCompleted"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <View style="@style/SectionDivider" android:layout_marginStart="16dp" />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/skip_web_pages" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchWebPages"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <View style="@style/SectionDivider" android:layout_marginStart="16dp" />
+
+            <LinearLayout style="@style/SettingRow">
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/server_time" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchServerTime"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <View style="@style/SectionDivider" android:layout_marginTop="8dp" android:layout_marginStart="16dp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="24dp"
+                android:paddingBottom="10dp"
+                android:text="@string/default_download_folder"
+                android:textColor="?attr/vText"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.AppCompatRadioButton
+                android:id="@+id/radioAutoFolder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="52dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="16dp"
+                android:text="@string/auto_folder"
+                android:textColor="?attr/vText"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:id="@+id/rowSuggestType"
+                style="@style/SettingRow"
+                android:paddingStart="40dp">
+
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/suggest_by_type"
+                    android:textSize="15sp" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchSuggestType"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/rowSuggestUrl"
+                style="@style/SettingRow"
+                android:paddingStart="40dp">
+
+                <TextView
+                    style="@style/SettingLabel"
+                    android:text="@string/suggest_by_url"
+                    android:textSize="15sp" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchSuggestUrl"
+                    style="@style/SettingSwitch" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatRadioButton
+                android:id="@+id/radioFixedFolder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:minHeight="52dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="16dp"
+                android:text="@string/fixed_folder"
+                android:textColor="?attr/vText"
+                android:textSize="16sp" />
+
+            <LinearLayout
+                android:id="@+id/folderRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="38dp"
+                android:layout_marginEnd="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/folderValue"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center_vertical"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="@string/no_folder_chosen"
+                    android:textColor="?attr/vText"
+                    android:textSize="14sp" />
+
+                <ImageButton
+                    android:id="@+id/folderButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_input"
+                    android:contentDescription="@string/pick_folder"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_folder"
+                    android:tint="?attr/vMuted" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/folderPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="38dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginEnd="16dp"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:textColor="?attr/vAccent"
+                android:textSize="13sp"
+                android:visibility="gone" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

@@ -14,12 +14,9 @@ public partial class AddDownloadWindow : Window
     {
         InitializeComponent();
 
-        // Compact by design, but never taller than the screen: past that the content inside scrolls instead
-        // of pushing the Start button below the taskbar.
-        MaxHeight = System.Windows.Forms.Screen.PrimaryScreen is { } screen
-            ? screen.WorkingArea.Height * 0.8
-            : SystemParameters.WorkArea.Height * 0.8;
-
+        // The confirmation window and the download window share one size on purpose: accepting a download swaps
+        // one for the other in place instead of moving the user's eyes to a different rectangle. Content that
+        // does not fit scrolls rather than growing the window.
         FolderTextBox.Text = defaultFolder;
         UrlTextBox.Focus();
     }

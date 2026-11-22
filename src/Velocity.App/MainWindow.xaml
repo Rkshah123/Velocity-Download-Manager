@@ -156,6 +156,18 @@
                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                               StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                     </Button>
+                    <!-- A refresh with a small badge: the link cannot be resumed, so the file is fetched again. -->
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="DownloadAgainClick"
+                            ToolTip="Download again — the link can no longer be resumed"
+                            Visibility="{Binding CanDownloadAgain, Converter={StaticResource BoolVisibility}}">
+                        <Grid>
+                            <Path Data="{StaticResource IconRefresh}" Width="15" Height="15" Stretch="Uniform"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                            <Ellipse Width="5" Height="5" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                     Margin="0,0,-1,-1" Fill="{DynamicResource DangerBrush}"/>
+                        </Grid>
+                    </Button>
                     <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="OpenFileClick" ToolTip="Open file"
                             Visibility="{Binding CanOpenFile, Converter={StaticResource BoolVisibility}}">
                         <Path Data="{StaticResource IconOpen}" Width="15" Height="15" Stretch="Uniform"
@@ -171,6 +183,12 @@
                     <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="OpenFolderClick" ToolTip="Show in folder"
                             Visibility="{Binding CanOpenFolder, Converter={StaticResource BoolVisibility}}">
                         <Path Data="{StaticResource IconFolder}" Width="15" Height="15" Stretch="Uniform"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeLineJoin="Round"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="WindowClick"
+                            ToolTip="Open download window">
+                        <Path Data="{StaticResource IconWindow}" Width="15" Height="15" Stretch="Uniform"
                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                               StrokeThickness="1.5" StrokeLineJoin="Round"/>
                     </Button>
@@ -462,6 +480,7 @@
                               ItemTemplate="{StaticResource DownloadCardTemplate}"
                               SelectionChanged="DownloadsSelectionChanged"
                               PreviewMouseDown="DownloadsGridPreviewMouseDown"
+                              MouseDoubleClick="DownloadsGridDoubleClick"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                               ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <ListView.ItemContainerStyle>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Velocity.Dark" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/dark_bg</item>
+        <item name="android:colorBackground">@color/dark_bg</item>
+        <item name="android:statusBarColor">@color/dark_header</item>
+        <item name="android:navigationBarColor">@color/dark_bg</item>
+        <item name="android:textColor">@color/dark_text</item>
+        <item name="android:textColorPrimary">@color/dark_text</item>
+        <item name="android:textColorSecondary">@color/dark_muted</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorAccent">@color/dark_accent</item>
+        <item name="colorControlActivated">@color/dark_accent</item>
+        <item name="android:alertDialogTheme">@style/Theme.Velocity.Dialog.Dark</item>
+        <item name="alertDialogTheme">@style/Theme.Velocity.Dialog.Dark</item>
+
+        <item name="vBg">@color/dark_bg</item>
+        <item name="vSurface">@color/dark_surface</item>
+        <item name="vSurfaceAlt">@color/dark_surface_alt</item>
+        <item name="vStroke">@color/dark_stroke</item>
+        <item name="vDivider">@color/dark_divider</item>
+        <item name="vText">@color/dark_text</item>
+        <item name="vMuted">@color/dark_muted</item>
+        <item name="vAccent">@color/dark_accent</item>
+        <item name="vOnAccent">@color/white</item>
+        <item name="vHeader">@color/dark_header</item>
+        <item name="vOnHeader">@color/white</item>
+        <item name="vSuccess">@color/success</item>
+        <item name="vWarning">@color/warning</item>
+        <item name="vDanger">@color/danger</item>
+        <item name="vTrackOff">@color/dark_track_off</item>
+        <item name="vThumbOff">@color/dark_thumb_off</item>
+        <item name="vThumbOn">@color/white</item>
+    </style>
+
+    <style name="Theme.Velocity.Beige" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/beige_bg</item>
+        <item name="android:colorBackground">@color/beige_bg</item>
+        <item name="android:statusBarColor">@color/beige_header</item>
+        <item name="android:navigationBarColor">@color/beige_bg</item>
+        <item name="android:textColor">@color/beige_text</item>
+        <item name="android:textColorPrimary">@color/beige_text</item>
+        <item name="android:textColorSecondary">@color/beige_muted</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="colorAccent">@color/beige_accent</item>
+        <item name="colorControlActivated">@color/beige_accent</item>
+        <item name="android:alertDialogTheme">@style/Theme.Velocity.Dialog.Beige</item>
+        <item name="alertDialogTheme">@style/Theme.Velocity.Dialog.Beige</item>
+
+        <item name="vBg">@color/beige_bg</item>
+        <item name="vSurface">@color/beige_surface</item>
+        <item name="vSurfaceAlt">@color/beige_surface_alt</item>
+        <item name="vStroke">@color/beige_stroke</item>
+        <item name="vDivider">@color/beige_divider</item>
+        <item name="vText">@color/beige_text</item>
+        <item name="vMuted">@color/beige_muted</item>
+        <item name="vAccent">@color/beige_accent</item>
+        <item name="vOnAccent">@color/white</item>
+        <item name="vHeader">@color/beige_header</item>
+        <item name="vOnHeader">@color/beige_surface</item>
+        <item name="vSuccess">#2F7D4F</item>
+        <item name="vWarning">#A86A12</item>
+        <item name="vDanger">#B23B3B</item>
+        <item name="vTrackOff">@color/beige_track_off</item>
+        <item name="vThumbOff">@color/beige_thumb_off</item>
+        <item name="vThumbOn">@color/white</item>
+    </style>
+
+    <style name="Theme.Velocity.Dialog.Dark" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="colorAccent">@color/dark_accent</item>
+        <item name="colorBackgroundFloating">@color/dark_surface</item>
+        <item name="android:colorBackgroundFloating">@color/dark_surface</item>
+        <item name="android:textColorPrimary">@color/dark_text</item>
+        <item name="android:textColorSecondary">@color/dark_muted</item>
+        <item name="android:windowBackground">@drawable/bg_dialog_dark</item>
+    </style>
+
+    <style name="Theme.Velocity.Dialog.Beige" parent="Theme.AppCompat.Light.Dialog.Alert">
+        <item name="colorAccent">@color/beige_accent</item>
+        <item name="colorBackgroundFloating">@color/beige_surface</item>
+        <item name="android:colorBackgroundFloating">@color/beige_surface</item>
+        <item name="android:textColorPrimary">@color/beige_text</item>
+        <item name="android:textColorSecondary">@color/beige_muted</item>
+        <item name="android:windowBackground">@drawable/bg_dialog_beige</item>
+    </style>
+
+</resources>
